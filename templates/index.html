@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-950">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI-Powered Network Performance Analyzer // NOC Dashboard</title>
+
+    <!-- Tailwind CSS via CDN (sole CSS framework) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        mono: ['"SFMono-Regular"', 'Consolas', '"Liberation Mono"', 'Menlo', 'monospace'],
+                        sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
+                    },
+                    colors: {
+                        slate: {
+                            850: '#151e2e',
+                            900: '#0f172a',
+                            950: '#020617',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* Thin scrollbars */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+
+        /* Pulsing dot for live badge */
+        @keyframes pulse-dot {
+
+            0%,
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: 0.5;
+                transform: scale(1.4);
+            }
+        }
+
+        .pulse-dot {
+            animation: pulse-dot 1.4s ease-in-out infinite;
+        }
+
+        /* Metric value color transition */
+        .metric-val {
+            transition: color 0.3s ease;
+        }
+    </style>
+</head>
+
+<body class="bg-slate-950 text-slate-300 h-full font-sans antialiased flex flex-col overflow-hidden">
+
+    <!-- ═══════════════════════ TOP HEADER ═══════════════════════ -->
+    <header
+        class="flex items-center justify-between border-b border-slate-800 bg-slate-900/80 backdrop-blur-sm px-6 py-4 shrink-0 shadow-sm z-20 relative">
+        <div class="flex items-center gap-4">
+            <div>
+                <h1 class="text-lg font-bold tracking-tight text-slate-100 uppercase">
+                    Network Operations Center
+                </h1>
+                <p class="text-[11px] text-slate-500 tracking-widest uppercase mt-0.5">
+                    AI-Powered Performance Analyzer &bull; SCAPY / RF / LSTM
+                </p>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-5">
+            <!-- Live badge -->
+            <span
+                class="inline-flex items-center gap-2 rounded border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-emerald-400">
+                <span
+                    class="pulse-dot h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]"></span>
+                LIVE SCAPY STREAM
+            </span>
+
+            <span class="text-[10px] text-slate-500 font-mono font-bold tracking-widest">
+                POLL INTERVAL: <span class="text-sky-400">2.0s</span>
+            </span>
+
+            <!-- Monitor toggle button -->
+            <button id="monitor-btn" onclick="toggleMonitoring()" class="rounded px-6 py-2 text-xs font-bold text-white uppercase tracking-wider
+                           bg-sky-600 hover:bg-sky-500 active:scale-95
+                           transition-all duration-150 shadow-[0_0_15px_rgba(2,132,199,0.3)]
+                           focus:outline-none border border-sky-400/20">
+                Start Monitoring Session
+            </button>
+        </div>
+    </header>
+
+    <!-- ═══════════════════════ TAB NAVIGATION BAR ═══════════════════════ -->
+    <nav
+        class="flex items-center gap-1 border-b border-slate-800/50 bg-slate-950 px-6 py-2 shrink-0 relative z-10 shadow-sm">
+        <button id="tab-btn-live-stream" onclick="switchTab('live-stream')"
+            class="tab-btn active bg-slate-800 text-slate-200 border-b-2 border-sky-500 px-4 py-2 text-xs font-bold uppercase tracking-wider transition-colors">
+            LIVE MONITOR
+        </button>
+        <button id="tab-btn-analytics" onclick="switchTab('analytics')"
+            class="tab-btn text-slate-500 hover:text-slate-300 hover:bg-slate-800/50 border-b-2 border-transparent px-4 py-2 text-xs font-bold uppercase tracking-wider transition-colors">
+            SESSION ANALYTICS
+        </button>
+        <button id="tab-btn-alert-center" onclick="switchTab('alert-center')"
+            class="tab-btn text-slate-500 hover:text-slate-300 hover:bg-slate-800/50 border-b-2 border-transparent px-4 py-2 text-xs font-bold uppercase tracking-wider transition-colors">
+            ALERT CENTER
+        </button>
+    </nav>
+
+    <!-- ═══════════════════════ TAB CONTENT AREA ═══════════════════════ -->
+    <main class="flex-1 flex flex-col overflow-hidden px-6 py-6 gap-6 relative z-0">
+
+        <!-- ─────────────── TAB: LIVE STREAM (Step 1) ─────────────── -->
+        <div id="tab-live-stream" class="flex flex-col gap-6 flex-1">
+
+            <!-- Metrics Cards Grid (Step 1.2) -->
+            <section class="grid grid-cols-5 gap-4 shrink-0">
+                <div
+                    class="bg-slate-900 border border-slate-800 rounded p-4 hover:border-slate-700 transition-colors shadow-sm relative overflow-hidden group">
+                    <div
+                        class="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-cyan-500/20 to-transparent group-hover:via-cyan-500/50 transition-all">
+                    </div>
+                    <p class="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1">Live Latency</p>
+                    <p id="m-latency" class="metric-val text-3xl font-bold font-mono text-cyan-400 tabular-nums">-- ms
+                    </p>
+                    <p class="mt-2 text-[10px] text-slate-500 uppercase tracking-wider font-semibold">ICMP Gateway
+                        Transit</p>
+                </div>
+
+                <div
+                    class="bg-slate-900 border border-slate-800 rounded p-4 hover:border-slate-700 transition-colors shadow-sm relative overflow-hidden group">
+                    <div
+                        class="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-emerald-500/20 to-transparent group-hover:via-emerald-500/50 transition-all">
+                    </div>
+                    <p class="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1">LSTM Forecast</p>
+                    <p id="m-forecast" class="metric-val text-3xl font-bold font-mono text-emerald-400 tabular-nums">--
+                        ms</p>
+                    <p class="mt-2 text-[10px] text-slate-500 uppercase tracking-wider font-semibold">10-Step Trend</p>
+                </div>
+
+                <div
+                    class="bg-slate-900 border border-slate-800 rounded p-4 hover:border-slate-700 transition-colors shadow-sm relative overflow-hidden group">
+                    <div
+                        class="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-cyan-500/20 to-transparent group-hover:via-cyan-500/50 transition-all">
+                    </div>
+                    <p class="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1">Jitter</p>
+                    <p id="m-jitter" class="metric-val text-3xl font-bold font-mono text-cyan-400 tabular-nums">-- ms
+                    </p>
+                    <p class="mt-2 text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Variance
+                        Dispersion</p>
+                </div>
+
+                <div
+                    class="bg-slate-900 border border-slate-800 rounded p-4 hover:border-slate-700 transition-colors shadow-sm relative overflow-hidden group">
+                    <div
+                        class="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-cyan-500/20 to-transparent group-hover:via-cyan-500/50 transition-all">
+                    </div>
+                    <p class="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1">Packet Loss</p>
+                    <p id="m-loss" class="metric-val text-3xl font-bold font-mono text-cyan-400 tabular-nums">-- %</p>
+                    <p class="mt-2 text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Drop Degradation
+                    </p>
+                </div>
+
+                <div
+                    class="bg-slate-900 border border-slate-800 rounded p-4 hover:border-slate-700 transition-colors shadow-sm relative overflow-hidden group">
+                    <div
+                        class="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-cyan-500/20 to-transparent group-hover:via-cyan-500/50 transition-all">
+                    </div>
+                    <p class="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1">Bandwidth Load</p>
+                    <p id="m-bandwidth" class="metric-val text-3xl font-bold font-mono text-cyan-400 tabular-nums">-- %
+                    </p>
+                    <p class="mt-2 text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Socket PPS
+                        Throughput</p>
+                </div>
+            </section>
+
+            <!-- Locked Height Layout: Chart + Diagnostics (Step 1.3 & 1.4) -->
+            <section class="grid grid-cols-3 gap-6 flex-1 min-h-0">
+                <!-- Left: Live chart (2/3) -->
+                <div
+                    class="col-span-2 bg-slate-900 border border-slate-800 rounded p-5 flex flex-col h-[calc(100vh-22rem)] min-h-[400px] shadow-sm">
+                    <div class="flex items-center justify-between mb-4 shrink-0">
+                        <div>
+                            <h2 class="text-xs font-bold text-slate-200 tracking-widest uppercase">Live Signal &amp;
+                                Sequential Forecast Engine</h2>
+                            <p class="text-[10px] text-slate-500 mt-1 uppercase tracking-wider font-semibold">Rolling
+                                Temporal Telemetry Window</p>
+                        </div>
+                        <span
+                            class="text-[10px] text-slate-500 border border-slate-700 bg-slate-950 rounded px-2 py-1 font-mono font-bold tracking-widest">MAX
+                            20 PTS</span>
+                    </div>
+                    <div class="relative flex-1 min-h-0">
+                        <canvas id="consoleChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Right: XAI Diagnostics console (1/3) -->
+                <div
+                    class="col-span-1 bg-slate-900 border border-slate-800 rounded p-5 flex flex-col h-[calc(100vh-22rem)] min-h-[400px] shadow-sm">
+                    <div class="flex items-center justify-between mb-3 shrink-0">
+                        <h2 class="text-xs font-bold text-slate-200 tracking-widest uppercase">Explainable AI
+                            Diagnostics</h2>
+                        <span
+                            class="text-[10px] border border-slate-700 bg-slate-950 text-slate-500 rounded px-2 py-1 font-mono font-bold tracking-widest">LIVE
+                            STREAM</span>
+                    </div>
+                    <div id="console-logs"
+                        class="flex-1 overflow-y-auto min-h-0 rounded bg-black border border-slate-800 p-4 font-mono text-[11px] text-emerald-400 shadow-inner flex flex-col">
+                        <div class="text-slate-600 mb-2">[INIT] Awaiting first telemetry frame sync from
+                            /api/telemetry/stream...</div>
+                    </div>
+                </div>
+            </section>
+
+        </div><!-- /#tab-live-stream -->
+
+
+        <!-- ─────────────── TAB: SESSION ANALYTICS (Step 2) ─────────────── -->
+        <div id="tab-analytics" class="hidden flex-col gap-6 flex-1 overflow-y-auto">
+
+            <!-- Top Row Summary (Step 2.1) -->
+            <section class="grid grid-cols-2 md:grid-cols-4 gap-4 shrink-0">
+                <div class="bg-slate-900 border border-slate-800 rounded p-5 shadow-sm">
+                    <p class="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-2">Duration</p>
+                    <p id="an-duration" class="text-3xl font-bold font-mono text-cyan-400 tabular-nums">--</p>
+                </div>
+                <div class="bg-slate-900 border border-slate-800 rounded p-5 shadow-sm">
+                    <p class="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-2">Total Triggers</p>
+                    <p id="an-total-alerts" class="text-3xl font-bold font-mono text-rose-500 tabular-nums">--</p>
+                </div>
+                <div class="bg-slate-900 border border-slate-800 rounded p-5 shadow-sm">
+                    <p class="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-2">AI Security Anomalies
+                    </p>
+                    <p id="an-anomalies" class="text-3xl font-bold font-mono text-rose-500 tabular-nums">--</p>
+                </div>
+                <div class="bg-slate-900 border border-slate-800 rounded p-5 shadow-sm">
+                    <p class="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-2">Mean Latency</p>
+                    <p id="an-avg-latency" class="text-3xl font-bold font-mono text-emerald-400 tabular-nums">--</p>
+                </div>
+            </section>
+
+            <!-- Split-Card Dashboard Section (Step 2.2) -->
+            <section class="grid grid-cols-3 gap-6 shrink-0 flex-1 min-h-[400px]">
+                <!-- Left Column (1/3): Doughnut Chart -->
+                <div
+                    class="col-span-1 bg-slate-900 border border-slate-800 rounded p-6 shadow-sm flex flex-col items-center justify-center">
+                    <h3
+                        class="text-xs font-bold text-slate-300 tracking-widest uppercase mb-8 text-center w-full border-b border-slate-800 pb-3">
+                        INCIDENT DISTRIBUTION SPECTRUM</h3>
+                    <div class="relative w-full max-w-[260px] aspect-square flex-1 min-h-0">
+                        <canvas id="analytics-pie-chart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Right Column (2/3): Metrics Table -->
+                <div class="col-span-2 bg-slate-900 border border-slate-800 rounded p-6 shadow-sm flex flex-col">
+                    <h3
+                        class="text-xs font-bold text-slate-300 tracking-widest uppercase mb-4 border-b border-slate-800 pb-3">
+                        Quantitative Metrics Mapping</h3>
+                    <div class="overflow-x-auto flex-1 bg-slate-950/50 rounded border border-slate-800">
+                        <table class="w-full text-left text-sm text-slate-400">
+                            <thead
+                                class="text-[10px] text-slate-500 uppercase bg-slate-900/80 border-b border-slate-800 font-bold tracking-wider">
+                                <tr>
+                                    <th class="px-5 py-3">Class Name</th>
+                                    <th class="px-5 py-3 text-center">Events Count</th>
+                                    <th class="px-5 py-3">Severity Level</th>
+                                    <th class="px-5 py-3 text-right">Operational Impact Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="metrics-table-body" class="divide-y divide-slate-800 font-mono text-xs">
+                                <!-- Populated dynamically by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+        </div><!-- /#tab-analytics -->
+
+
+        <!-- ─────────────── TAB: ALERT CENTER (Step 3) ─────────────── -->
+        <div id="tab-alert-center" class="hidden flex-col flex-1 overflow-y-auto items-center py-2">
+
+            <div class="w-full max-w-4xl flex flex-col gap-4 pb-10">
+                <div class="flex items-center justify-between shrink-0 mb-2 border-b border-slate-800 pb-3">
+                    <div>
+                        <h2 class="text-sm font-bold text-slate-200 tracking-widest uppercase">Alert Event Log</h2>
+                        <p class="text-xs text-slate-500 mt-1 uppercase tracking-wider font-semibold">All DEGRADED and
+                            CRITICAL events captured during the last session.</p>
+                    </div>
+                    <span id="ac-count-badge"
+                        class="rounded px-3 py-1 text-[10px] font-bold font-mono tracking-widest bg-slate-800 text-slate-400 border border-slate-700">
+                        0 ALERTS
+                    </span>
+                </div>
+
+                <div id="alert-list-container" class="space-y-4 w-full">
+                    <div class="bg-slate-900 border border-slate-800 rounded p-5 text-center shadow-sm">
+                        <p class="text-slate-500 text-xs font-mono tracking-wider">[INIT] No session completed yet. Run
+                            a monitoring session first.</p>
+                    </div>
+                </div>
+            </div>
+
+        </div><!-- /#tab-alert-center -->
+
+    </main>
+
+    <!-- ═══════════════════════ FOOTER ═══════════════════════ -->
+    <footer
+        class="flex items-center justify-between border-t border-slate-800 bg-slate-900/50 px-6 py-2 text-[10px] font-bold tracking-widest uppercase text-slate-600 shrink-0 z-10">
+        <span>AI Network Analyzer &bull; Scapy / RandomForest / LSTM</span>
+        <span id="footer-ts">IDLE</span>
+    </footer>
+
+
+    <!-- ═══════════════════════ JAVASCRIPT ═══════════════════════ -->
+    <script>
+
+        // ═══════════════════════════════════════════════════════════════════════════
+        // 1. TAB SWITCHER (Step 4.1)
+        // ═══════════════════════════════════════════════════════════════════════════
+
+        const TAB_IDS = ['live-stream', 'analytics', 'alert-center'];
+        const ACTIVE_CLS = 'tab-btn active bg-slate-800 text-slate-200 border-b-2 border-sky-500 px-4 py-2 text-xs font-bold uppercase tracking-wider transition-colors';
+        const INACTIVE_CLS = 'tab-btn text-slate-500 hover:text-slate-300 hover:bg-slate-800/50 border-b-2 border-transparent px-4 py-2 text-xs font-bold uppercase tracking-wider transition-colors';
+
+        function switchTab(tabId) {
+            TAB_IDS.forEach(id => {
+                const panel = document.getElementById('tab-' + id);
+                const btn = document.getElementById('tab-btn-' + id);
+                if (id === tabId) {
+                    panel.classList.remove('hidden');
+                    panel.classList.add('flex');
+                    btn.className = ACTIVE_CLS;
+                } else {
+                    panel.classList.add('hidden');
+                    panel.classList.remove('flex');
+                    btn.className = INACTIVE_CLS;
+                }
+            });
+        }
+
+        // Initialise — Live Stream is visible by default
+        switchTab('live-stream');
+
+
+        // ═══════════════════════════════════════════════════════════════════════════
+        // 2. CHART.JS — Live line chart
+        // ═══════════════════════════════════════════════════════════════════════════
+
+        const canvasCtx = document.getElementById('consoleChart').getContext('2d');
+
+        const chartData = {
+            labels: [],
+            datasets: [
+                {
+                    label: 'Live Latency (ms)',
+                    data: [],
+                    borderColor: '#22d3ee', // cyan-400
+                    backgroundColor: 'rgba(34,211,238,0.1)',
+                    borderWidth: 2, tension: 0.3, fill: true,
+                    pointRadius: 0, pointHoverRadius: 4,
+                },
+                {
+                    label: 'LSTM Forecast (ms)',
+                    data: [],
+                    borderColor: '#34d399', // emerald-400
+                    backgroundColor: 'transparent',
+                    borderWidth: 2, borderDash: [5, 5], tension: 0.3, fill: false,
+                    pointRadius: 0, pointHoverRadius: 4,
+                },
+                {
+                    label: 'Bandwidth Load (%)',
+                    data: [],
+                    borderColor: '#818cf8', // indigo-400
+                    backgroundColor: 'transparent',
+                    borderWidth: 2, tension: 0.3, fill: false,
+                    pointRadius: 0, pointHoverRadius: 4,
+                }
+            ]
+        };
+
+        const consoleChart = new Chart(canvasCtx, {
+            type: 'line',
+            data: chartData,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: { duration: 300, easing: 'linear' },
+                interaction: { mode: 'index', intersect: false },
+                scales: {
+                    x: {
+                        grid: { color: 'rgba(30,41,59,0.5)', drawBorder: false },
+                        ticks: { color: '#64748b', font: { size: 10, family: 'monospace' }, maxTicksLimit: 10 }
+                    },
+                    y: {
+                        grid: { color: 'rgba(30,41,59,0.5)', drawBorder: false, borderDash: [2, 4] },
+                        ticks: { color: '#64748b', font: { size: 10, family: 'monospace' }, padding: 10 },
+                        suggestedMin: 0, suggestedMax: 100
+                    }
+                },
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        align: 'end',
+                        labels: { color: '#94a3b8', font: { size: 10, family: 'monospace', weight: 'bold' }, boxWidth: 12, padding: 15, usePointStyle: true }
+                    },
+                    tooltip: {
+                        backgroundColor: '#020617', borderColor: '#1e293b', borderWidth: 1,
+                        titleColor: '#f8fafc', bodyColor: '#cbd5e1', padding: 12, cornerRadius: 4,
+                        titleFont: { family: 'monospace', size: 11 }, bodyFont: { family: 'monospace', size: 11 }
+                    }
+                }
+            }
+        });
+
+        const MAX_POINTS = 20;
+
+
+        // ═══════════════════════════════════════════════════════════════════════════
+        // 3. HELPERS
+        // ═══════════════════════════════════════════════════════════════════════════
+
+        function nowLabel() {
+            return new Date().toLocaleTimeString('en-US', {
+                hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit'
+            });
+        }
+
+        function safeNum(val, fallback = 0) {
+            const n = parseFloat(val);
+            return isFinite(n) ? n : fallback;
+        }
+
+        function setMetric(id, value, unit, isAlert = false) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.textContent = value + ' ' + unit;
+            el.classList.remove('text-cyan-400', 'text-rose-500', 'text-emerald-400');
+            el.classList.add(isAlert ? 'text-rose-500' : (id === 'm-forecast' ? 'text-emerald-400' : 'text-cyan-400'));
+        }
+
+        function formatDuration(ms) {
+            const s = Math.floor(ms / 1000);
+            const m = Math.floor(s / 60);
+            const sec = s % 60;
+            if (m > 0) return `${m}m ${sec}s`;
+            return `${sec}s`;
+        }
+
+
+        // ═══════════════════════════════════════════════════════════════════════════
+        // 4. SESSION TRACKING STATE
+        // ═══════════════════════════════════════════════════════════════════════════
+
+        let sessionStartTime = null;
+        let totalAlerts = 0;
+        let latencyArray = [];
+        let alertCounts = { bandwidth: 0, packet_loss: 0, anomaly: 0 };
+        let sessionAlertsHistory = [];
+
+        function resetSessionState() {
+            sessionStartTime = null;
+            totalAlerts = 0;
+            latencyArray = [];
+            alertCounts = { bandwidth: 0, packet_loss: 0, anomaly: 0 };
+            sessionAlertsHistory = [];
+        }
+
+
+        // ═══════════════════════════════════════════════════════════════════════════
+        // 5. MONITORING TOGGLE (Step 4.2)
+        // ═══════════════════════════════════════════════════════════════════════════
+
+        let monitorInterval = null;
+        let isMonitoring = false;
+        let pieChartRef = null;
+
+        function toggleMonitoring() {
+            const btn = document.getElementById('monitor-btn');
+
+            if (!isMonitoring) {
+                // ── START ─────────────────────────────────────────────────────────
+                isMonitoring = true;
+                resetSessionState();
+                sessionStartTime = Date.now();
+
+                btn.textContent = 'Stop Monitoring Session';
+                btn.className = btn.className
+                    .replace('bg-sky-600', 'bg-rose-600')
+                    .replace('hover:bg-sky-500', 'hover:bg-rose-500')
+                    .replace('shadow-[0_0_15px_rgba(2,132,199,0.3)]', 'shadow-[0_0_15px_rgba(225,29,72,0.3)]')
+                    .replace('border-sky-400/20', 'border-rose-400/20');
+
+                appendLog('text-slate-500', 'text-slate-600', '[SESSION] Monitoring session started.', '');
+
+                switchTab('live-stream');
+                streamTelemetry();
+                monitorInterval = setInterval(streamTelemetry, 2000);
+
+            } else {
+                // ── STOP ──────────────────────────────────────────────────────────
+                isMonitoring = false;
+                clearInterval(monitorInterval);
+                monitorInterval = null;
+
+                btn.textContent = 'Start Monitoring Session';
+                btn.className = btn.className
+                    .replace('bg-rose-600', 'bg-sky-600')
+                    .replace('hover:bg-rose-500', 'hover:bg-sky-500')
+                    .replace('shadow-[0_0_15px_rgba(225,29,72,0.3)]', 'shadow-[0_0_15px_rgba(2,132,199,0.3)]')
+                    .replace('border-rose-400/20', 'border-sky-400/20');
+
+                appendLog('text-slate-500', 'text-slate-600', '[SESSION] Monitoring session paused.', '');
+
+                // Route user straight to analytics (Step 4.2)
+                buildAnalyticsTab();
+                buildAlertCenter();
+                switchTab('analytics');
+            }
+        }
+
+
+        // ═══════════════════════════════════════════════════════════════════════════
+        // 6. POST-SESSION REPORT BUILDERS (Step 2.2 & 3.2)
+        // ═══════════════════════════════════════════════════════════════════════════
+
+        function buildAnalyticsTab() {
+            const durationMs = sessionStartTime ? (Date.now() - sessionStartTime) : 0;
+            const avgLatency = latencyArray.length > 0
+                ? (latencyArray.reduce((a, b) => a + b, 0) / latencyArray.length).toFixed(1)
+                : '0.0';
+
+            // Summary cards
+            document.getElementById('an-duration').textContent = formatDuration(durationMs);
+            document.getElementById('an-total-alerts').textContent = totalAlerts;
+            document.getElementById('an-anomalies').textContent = alertCounts.anomaly;
+            document.getElementById('an-avg-latency').textContent = avgLatency + ' ms';
+
+            // Destroy old pie chart
+            if (pieChartRef) { pieChartRef.destroy(); pieChartRef = null; }
+
+            const pieCtx = document.getElementById('analytics-pie-chart').getContext('2d');
+            const totalTypes = alertCounts.anomaly + alertCounts.bandwidth + alertCounts.packet_loss;
+
+            // Doughnut configuration (Left Column 1/3)
+            pieChartRef = new Chart(pieCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['AI Anomaly', 'Bandwidth Bottleneck', 'Packet Loss'],
+                    datasets: [{
+                        data: totalTypes > 0 ? [alertCounts.anomaly, alertCounts.bandwidth, alertCounts.packet_loss] : [1, 0, 0],
+                        backgroundColor: totalTypes > 0 ? ['#f43f5e', '#f59e0b', '#f97316'] : ['#1e293b', '#1e293b', '#1e293b'],
+                        borderColor: '#0f172a',
+                        borderWidth: 4,
+                        hoverOffset: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '75%',
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { color: '#94a3b8', font: { size: 10, family: 'monospace' }, usePointStyle: true, padding: 20 }
+                        },
+                        tooltip: {
+                            backgroundColor: '#020617', borderColor: '#1e293b', borderWidth: 1,
+                            titleFont: { family: 'monospace' }, bodyFont: { family: 'monospace' },
+                            callbacks: {
+                                label: ctx => {
+                                    if (!totalTypes) return ' No alerts recorded';
+                                    return ` ${ctx.label}: ${ctx.raw}`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Metrics Table Build (Right Column 2/3)
+            const tableBody = document.getElementById('metrics-table-body');
+            tableBody.innerHTML = `
+                <tr class="hover:bg-slate-800/30 transition-colors">
+                    <td class="px-5 py-3 text-rose-400 font-semibold">AI Anomaly</td>
+                    <td class="px-5 py-3 text-center text-slate-300">${alertCounts.anomaly}</td>
+                    <td class="px-5 py-3"><span class="px-2 py-1 rounded text-[10px] uppercase font-bold tracking-wider ${alertCounts.anomaly > 0 ? 'bg-rose-500/10 text-rose-400 border border-rose-500/30' : 'bg-slate-800 text-slate-500'}">CRITICAL</span></td>
+                    <td class="px-5 py-3 text-right ${alertCounts.anomaly > 0 ? 'text-rose-500' : 'text-slate-500'}">${alertCounts.anomaly > 0 ? 'Breached' : 'Nominal'}</td>
+                </tr>
+                <tr class="hover:bg-slate-800/30 transition-colors">
+                    <td class="px-5 py-3 text-amber-400 font-semibold">Bandwidth Bottleneck</td>
+                    <td class="px-5 py-3 text-center text-slate-300">${alertCounts.bandwidth}</td>
+                    <td class="px-5 py-3"><span class="px-2 py-1 rounded text-[10px] uppercase font-bold tracking-wider ${alertCounts.bandwidth > 0 ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30' : 'bg-slate-800 text-slate-500'}">DEGRADED</span></td>
+                    <td class="px-5 py-3 text-right ${alertCounts.bandwidth > 0 ? 'text-amber-500' : 'text-slate-500'}">${alertCounts.bandwidth > 0 ? 'Saturated' : 'Nominal'}</td>
+                </tr>
+                <tr class="hover:bg-slate-800/30 transition-colors">
+                    <td class="px-5 py-3 text-orange-400 font-semibold">Packet Loss</td>
+                    <td class="px-5 py-3 text-center text-slate-300">${alertCounts.packet_loss}</td>
+                    <td class="px-5 py-3"><span class="px-2 py-1 rounded text-[10px] uppercase font-bold tracking-wider ${alertCounts.packet_loss > 0 ? 'bg-orange-500/10 text-orange-400 border border-orange-500/30' : 'bg-slate-800 text-slate-500'}">DEGRADED</span></td>
+                    <td class="px-5 py-3 text-right ${alertCounts.packet_loss > 0 ? 'text-orange-500' : 'text-slate-500'}">${alertCounts.packet_loss > 0 ? 'Saturated' : 'Nominal'}</td>
+                </tr>
+            `;
+        }
+
+        function buildAlertCenter() {
+            const container = document.getElementById('alert-list-container');
+            const countBadge = document.getElementById('ac-count-badge');
+
+            container.innerHTML = '';
+            countBadge.textContent = `${sessionAlertsHistory.length} ALERTS`;
+
+            if (sessionAlertsHistory.length === 0) {
+                container.innerHTML = `
+                    <div class="bg-slate-900 border border-slate-800 rounded p-6 text-center shadow-sm">
+                        <p class="text-slate-500 text-xs font-mono tracking-wider">[INFO] No anomalies detected during the session.</p>
+                    </div>`;
+                return;
+            }
+
+            // Step 3.2 & 3.3
+            sessionAlertsHistory.forEach(alert => {
+                const isCritical = alert.state === 'CRITICAL';
+
+                // Solid 4px left accent border
+                const borderCls = isCritical ? 'border-l-rose-500' : 'border-l-amber-500';
+                const tagCls = isCritical ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' : 'bg-amber-500/10 text-amber-400 border-amber-500/20';
+
+                const card = document.createElement('div');
+                card.className = `bg-slate-900 border border-slate-800 border-l-[4px] ${borderCls} rounded p-5 shadow-sm flex flex-col gap-3 hover:bg-slate-800/50 transition-colors`;
+
+                card.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <div class="font-mono text-[10px] text-slate-500 tracking-widest font-bold">${alert.timestamp}</div>
+                        <span class="px-2 py-0.5 rounded border ${tagCls} text-[9px] font-bold uppercase tracking-widest">${alert.state}</span>
+                    </div>
+                    <div class="text-sm text-slate-200 font-medium leading-relaxed">${alert.diagnostic}</div>
+                    ${alert.fix ? `<div class="mt-1 bg-slate-950/50 rounded p-3 text-sky-400 text-xs font-mono border border-sky-900/30 leading-relaxed shadow-inner"><span class="font-bold text-sky-500 uppercase tracking-widest text-[10px] block mb-1">Recommended Resolution Strategy</span>${alert.fix}</div>` : ''}
+                `;
+                container.appendChild(card);
+            });
+        }
+
+
+        // ═══════════════════════════════════════════════════════════════════════════
+        // 7. CONSOLE LOG BUILDER (Step 1.4)
+        // ═══════════════════════════════════════════════════════════════════════════
+
+        function appendLog(rowColor, tsColor, diagnostic, recommendedFix) {
+            const logger = document.getElementById('console-logs');
+            const timeLabel = nowLabel();
+
+            const entry = document.createElement('div');
+            entry.className = `py-1.5 border-b border-slate-900/50 ${rowColor} leading-relaxed`;
+
+            let html = `<span class="${tsColor}">[${timeLabel}]</span> <span class="${rowColor} font-medium">${diagnostic}</span>`;
+            if (recommendedFix && recommendedFix.trim() !== '') {
+                html += `<br><span class="text-slate-500 text-[10px] mt-0.5 inline-block">-> ${recommendedFix}</span>`;
+            }
+            entry.innerHTML = html;
+
+            // Prepend new row entry
+            logger.insertBefore(entry, logger.firstChild);
+
+            // Drop oldest when exceeds 50
+            while (logger.children.length > 50) {
+                logger.removeChild(logger.lastChild);
+            }
+        }
+
+
+        // ═══════════════════════════════════════════════════════════════════════════
+        // 8. CORE TELEMETRY FETCH LOOP
+        // ═══════════════════════════════════════════════════════════════════════════
+
+        function streamTelemetry() {
+            fetch('/api/telemetry/stream')
+                .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+                .then(data => {
+                    const metrics = data.metrics || {};
+                    const predictions = data.predictions || {};
+
+                    const latency = safeNum(metrics.latency ?? metrics.latency_ms, 0);
+                    const jitter = safeNum(metrics.jitter ?? metrics.jitter_ms, 0);
+                    const loss = safeNum(metrics.packet_loss ?? metrics.packet_loss_pct, 0);
+                    const bandwidth = safeNum(metrics.bandwidth ?? metrics.bandwidth_utilization_pct, 0);
+                    const forecast = safeNum(data.forecasted_latency ?? predictions.forecasted_latency ?? latency);
+
+                    const systemState = data.system_state || 'OPTIMAL';
+                    const diagnostic = data.diagnostic || '[INFO] Network traffic is smooth and normal.';
+                    const recommendedFix = data.recommended_fix || '';
+
+                    const timeLabel = nowLabel();
+
+                    // ── Track session data ───────────────────────────────────────────
+                    latencyArray.push(latency);
+
+                    if (systemState === 'CRITICAL') {
+                        totalAlerts++;
+                        alertCounts.anomaly++;
+                        sessionAlertsHistory.push({ timestamp: timeLabel, state: systemState, diagnostic, fix: recommendedFix });
+                    } else if (systemState === 'DEGRADED') {
+                        totalAlerts++;
+                        if (diagnostic.toLowerCase().includes('bottleneck') ||
+                            diagnostic.toLowerCase().includes('bandwidth') ||
+                            diagnostic.toLowerCase().includes('traffic')) {
+                            alertCounts.bandwidth++;
+                        } else {
+                            alertCounts.packet_loss++;
+                        }
+                        sessionAlertsHistory.push({ timestamp: timeLabel, state: systemState, diagnostic, fix: recommendedFix });
+                    }
+
+                    // ── Metric cards (Step 1.2: Override to rose-500 if breached) ───
+                    setMetric('m-latency', latency.toFixed(1), 'ms', latency > 100);
+                    setMetric('m-forecast', forecast.toFixed(1), 'ms', forecast > 100);
+                    setMetric('m-jitter', jitter.toFixed(1), 'ms', jitter > 10);
+                    setMetric('m-loss', loss.toFixed(2), '%', loss > 2);
+                    setMetric('m-bandwidth', bandwidth.toFixed(1), '%', bandwidth > 85);
+
+                    // ── Chart.js line data push ──────────────────────────────────────
+                    if (chartData.labels.length >= MAX_POINTS) {
+                        chartData.labels.shift();
+                        chartData.datasets.forEach(ds => ds.data.shift());
+                    }
+                    chartData.labels.push(timeLabel);
+                    chartData.datasets[0].data.push(latency);
+                    chartData.datasets[1].data.push(forecast);
+                    chartData.datasets[2].data.push(bandwidth);
+                    consoleChart.update();
+
+                    // ── XAI console row ──────────────────────────────────────────────
+                    let rowColor, tsColor;
+                    if (systemState === 'CRITICAL') { rowColor = 'text-rose-500'; tsColor = 'text-rose-700'; }
+                    else if (systemState === 'DEGRADED') { rowColor = 'text-amber-500'; tsColor = 'text-amber-700'; }
+                    else { rowColor = 'text-emerald-400'; tsColor = 'text-slate-700'; }
+                    appendLog(rowColor, tsColor, diagnostic, recommendedFix);
+
+                    // ── Footer ───────────────────────────────────────────────────────
+                    const ft = document.getElementById('footer-ts');
+                    if (ft) ft.textContent = `LAST SYNC: ${timeLabel} // STATE: ${systemState}`;
+                })
+                .catch(err => {
+                    console.error('[NOC] Fetch error:', err);
+                    appendLog('text-slate-500', 'text-slate-700', `[ERR] ${err.message}`, '');
+                });
+        }
+
+    </script>
+</body>
+
+</html>
