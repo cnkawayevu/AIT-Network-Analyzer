@@ -503,7 +503,7 @@
         // ═══════════════════════════════════════════════════════════════════════════
 
         let monitorInterval = null;
-        let isMonitoring = false;
+        let isMonitoring = false; fetch('/api/control', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({action: 'stop'})});
         let pieChartRef = null;
 
         function toggleMonitoring() {
@@ -511,7 +511,7 @@
 
             if (!isMonitoring) {
                 // ── START ─────────────────────────────────────────────────────────
-                isMonitoring = true;
+                isMonitoring = true; fetch('/api/control', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({action: 'start'})});
                 resetSessionState();
                 sessionStartTime = Date.now();
 
@@ -530,7 +530,7 @@
 
             } else {
                 // ── STOP ──────────────────────────────────────────────────────────
-                isMonitoring = false;
+                isMonitoring = false; fetch('/api/control', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({action: 'stop'})});
                 clearInterval(monitorInterval);
                 monitorInterval = null;
 

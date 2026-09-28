@@ -1,7 +1,7 @@
 import os
 os.environ["SCAPY_USE_LIBPCAP"] = "0"
 
-from flask import Flask, render_template, jsonify
+from flask import Flask, render_template, jsonify, request
 import time
 import threading
 import random
@@ -38,6 +38,7 @@ packet_count = 0
 packet_lengths = [64]
 last_check_time = time.time()
 data_lock = threading.Lock()
+is_monitoring = False
 
 # Resolve the best active physical interface once at startup
 ACTIVE_IFACE = get_active_interface()   # e.g. "WiFi" or "Ethernet"; None = all interfaces
@@ -52,7 +53,9 @@ def live_packet_sniffer():
     global packet_count, packet_lengths
 
     def process_packet(packet):
-        global packet_count, packet_lengths
+        global packet_count, packet_lengths, is_monitoring
+        if not is_monitoring:
+            return
         if packet.haslayer(IP):
             with data_lock:
                 packet_count += 1
@@ -83,10 +86,26 @@ def live_packet_sniffer():
 
 def track_performance_metrics():
     """Calculates true dynamic QoS network performance values periodically."""
-    global packet_count, last_check_time, network_metrics, packet_lengths
+    global packet_count, last_check_time, network_metrics, packet_lengths, is_monitoring, historical_latencies
 
     while True:
         time.sleep(2)
+        if not is_monitoring:
+            with data_lock:
+                packet_count = 0
+                packet_lengths = [64]
+                historical_latencies = [18.0] * 10
+                last_check_time = time.time()
+                network_metrics = {
+                    "latency": 20.0,
+                    "jitter": 2.5,
+                    "packet_loss": 0.1,
+                    "bandwidth": 15.0,
+                    "anomaly_flag": 0,
+                    "diagnostic_report": "Network traffic is stable."
+                }
+            continue
+
         current_time = time.time()
         elapsed = current_time - last_check_time
 
@@ -141,6 +160,21 @@ threading.Thread(target=track_performance_metrics, daemon=True).start()
 def console():
     """Serves the main operations dashboard console."""
     return render_template('index.html')
+
+
+@app.route('/api/control', methods=['POST'])
+def control():
+    """Toggles background network monitoring."""
+    global is_monitoring
+    data = request.get_json()
+    if data and "action" in data:
+        if data["action"] == "start":
+            is_monitoring = True
+            return jsonify({"status": "success", "is_monitoring": True})
+        elif data["action"] == "stop":
+            is_monitoring = False
+            return jsonify({"status": "success", "is_monitoring": False})
+    return jsonify({"status": "error", "message": "Invalid payload"}), 400
 
 
 @app.route('/api/telemetry')
