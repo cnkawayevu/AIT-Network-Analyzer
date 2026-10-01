@@ -46,8 +46,8 @@ class NetworkAIEngine:
         # Authentic feature columns commonly extracted from the CIC-IDS2017 dataset
         self.feature_columns = [
             'Flow Duration', 'Total Fwd Packets', 'Bwd Packets/s',
-            'Fwd Packet Length Max', 'Fwd Packet Length Min', 
-            'Bwd Packet Length Max', 'Bwd Packet Length Min', 
+            'Fwd Packet Length Max', 'Fwd Packet Length Min',
+            'Bwd Packet Length Max', 'Bwd Packet Length Min',
             'Flow Packets/s', 'Flow Bytes/s'
         ]
         self.rf_model_path = rf_model_path
@@ -65,7 +65,7 @@ class NetworkAIEngine:
             self.load_rf_model(self.rf_model_path)
         else:
             self._init_fresh_rf_model()
-            
+
         # Load pre-trained LSTM if available
         if os.path.exists(self.lstm_model_path) and os.path.exists(self.lstm_scaler_path):
             self.load_lstm_model()
@@ -216,6 +216,66 @@ class NetworkAIEngine:
         pred = int(self.rf_model.predict(live_data)[0])
         return "Normal" if pred == 0 else "Abnormal"
 
+    def get_rf_interpretation(self, live_packet_metrics):
+        """
+        Returns academically honest feature importance of the Random Forest model globally,
+        along with the model's predicted-class model probability for the current batch.
+        """
+        if not self.is_trained or self.rf_model is None:
+            return None
+
+        # Verify feature importances are available and match expected size
+        if not hasattr(self.rf_model, 'feature_importances_'):
+            return None
+
+        importances = self.rf_model.feature_importances_
+        if len(importances) != len(self.feature_columns):
+            return None
+
+        # Parse the current feature vector
+        arr = np.asarray(live_packet_metrics, dtype=np.float64).flatten()
+        if len(arr) != len(self.feature_columns):
+            return None
+
+        interpretation = {
+            "method": "global_feature_importance",
+            "scope": "model_level",
+            "top_features": []
+        }
+
+        # Safe predict_proba integration
+        if hasattr(self.rf_model, 'predict_proba') and hasattr(self.rf_model, 'classes_'):
+            try:
+                live_data = pd.DataFrame([arr], columns=self.feature_columns)
+                proba = self.rf_model.predict_proba(live_data)[0]
+                pred_idx = int(self.rf_model.predict(live_data)[0])
+
+                # Class 0 -> Normal, Class 1 -> Abnormal
+                if list(self.rf_model.classes_) == [0, 1]:
+                    # The predicted class is pred_idx, its probability is proba[pred_idx] (or proba[1] if pred_idx == 1)
+                    idx_in_classes = list(self.rf_model.classes_).index(pred_idx)
+                    confidence = float(proba[idx_in_classes])
+                    interpretation["classification_confidence"] = round(confidence, 4)
+            except Exception:
+                pass # Gracefully omit confidence if there's any error
+
+        # Map importances to feature names and get top 3
+        mapped = []
+        for i, (name, imp) in enumerate(zip(self.feature_columns, importances)):
+            mapped.append({
+                "feature_name": name,
+                "importance": float(imp),
+                "importance_percent": round(float(imp) * 100, 2),
+                "current_value": round(float(arr[i]), 4)
+            })
+
+        # Sort by importance descending
+        mapped.sort(key=lambda x: x["importance"], reverse=True)
+        interpretation["top_features"] = mapped[:3]
+
+        return interpretation
+
+
     def build_lstm_forecaster(self, time_steps=None, features=1):
         """
         Builds the sequential time-series forecasting model using TensorFlow/Keras.
@@ -288,7 +348,7 @@ class NetworkAIEngine:
 
             # Initialize MinMaxScaler
             self.scaler = MinMaxScaler(feature_range=(0, 1))
-            
+
             # Chronological train-test split before scaling to avoid data leakage
             # e.g., 80% train, 20% test
             train_size = int(len(series) * 0.8)
@@ -308,11 +368,11 @@ class NetworkAIEngine:
             print("LSTM model training complete.")
 
             y_pred = self.lstm_model.predict(X_test, verbose=0)
-            
+
             # Inverse transform to get true milliseconds
             y_test_inv = self.scaler.inverse_transform(y_test.reshape(-1, 1))
             y_pred_inv = self.scaler.inverse_transform(y_pred.reshape(-1, 1))
-            
+
             mae_ms = mean_absolute_error(y_test_inv, y_pred_inv)
             mse = mean_squared_error(y_test_inv, y_pred_inv)
             rmse_ms = np.sqrt(mse)
@@ -369,7 +429,7 @@ class NetworkAIEngine:
 
         # Reshape to 3D sliding window for single prediction: (1, time_steps, 1)
         X_sample = arr.reshape(1, steps, 1)
-        
+
         try:
             X_sample_scaled = self.scaler.transform(X_sample.reshape(-1, 1)).reshape(1, steps, 1)
             predicted_val_scaled = self.lstm_model.predict(X_sample_scaled, verbose=0)

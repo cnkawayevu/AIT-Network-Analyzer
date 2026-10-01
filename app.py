@@ -41,16 +41,6 @@ historical_valid_rtts = []
 latest_completed_batch = None
 batch_counter = 0
 
-# Core Global Network Metrics State Engine (Fallback until first batch)
-network_metrics = {
-    "latency": None,
-    "jitter": None,
-    "packet_loss": None,
-    "throughput_mbps": 0.0,
-    "anomaly_flag": 0,
-    "diagnostic_report": "Network traffic is stable."
-}
-
 # Live packet capture aggregates (interval reset)
 captured_bytes = 0
 fwd_lengths = []
@@ -304,15 +294,17 @@ def track_performance_metrics():
 
         forecasted_latency = ai_engine.predict_latency(historical_latencies)
 
-        # 5. Hybrid Explainability: RF security classification + raw performance thresholds
+        # 5. Health evaluation: RF classification + performance threshold rules
         health_status = evaluate_health(rf_classification, latency_val, packet_loss_pct)
         system_state = health_status["system_state"]
         diagnostic = health_status["diagnostic"]
         recommended_fix = health_status["recommended_fix"]
         active_alerts = health_status["alerts"]
-        anomaly_state = 1 if rf_classification == 'Abnormal' else 0
 
         batch_counter += 1
+        # 6. Interpretability (Feature-aware)
+        rf_interpretation = ai_engine.get_rf_interpretation(live_features)
+
         latest_completed_batch = {
             "batch_id": batch_counter,
             "status": "success",
@@ -336,18 +328,7 @@ def track_performance_metrics():
             "forecasted_latency": forecasted_latency,
             "diagnostic": diagnostic,
             "recommended_fix": recommended_fix,
-            "payload": {
-                "metrics": {
-                    "latency_ms": latency_val,
-                    "jitter_ms": jitter_val,
-                    "packet_loss_pct": packet_loss_pct,
-                    "bandwidth_utilization_pct": throughput_mbps
-                },
-                "analysis": {
-                    "anomaly_state": anomaly_state,
-                    "root_cause_explanation": diagnostic
-                }
-            }
+            "interpretability": rf_interpretation
         }
 
         with session_lock:
@@ -461,10 +442,7 @@ def get_telemetry():
             "forecasted_latency": None,
             "diagnostic": "[INIT] Gathering telemetry window...",
             "recommended_fix": "",
-            "payload": {
-                "metrics": {"latency_ms": None, "jitter_ms": None, "packet_loss_pct": None, "bandwidth_utilization_pct": 0.0},
-                "analysis": {"anomaly_state": 0, "root_cause_explanation": "Initializing"}
-            }
+            "interpretability": None
         })
         
     return jsonify(latest_completed_batch)
@@ -483,4 +461,4 @@ def session_details(session_id):
     return jsonify({"status": "success", "data": details})
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000, use_reloader=False)
+    app.run(debug=False, port=5000, use_reloader=False)
