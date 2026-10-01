@@ -1,12 +1,14 @@
 import os
+import json
 import joblib
 import numpy as np
 import pandas as pd
+from datetime import datetime
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import precision_score, recall_score, f1_score, classification_report, mean_absolute_error, mean_squared_error
 from sklearn.preprocessing import MinMaxScaler
-from tensorflow.keras.models import Sequential
+from tensorflow.keras.models import Sequential, load_model
 from tensorflow.keras.layers import Input, LSTM, Dense, Dropout
 
 
@@ -49,17 +51,26 @@ class NetworkAIEngine:
             'Flow Packets/s', 'Flow Bytes/s'
         ]
         self.rf_model_path = rf_model_path
+        self.lstm_model_path = "lstm_latency_model.keras"
+        self.lstm_scaler_path = "lstm_scaler.joblib"
         self.time_steps = time_steps
         self.rf_model = None
         self.lstm_model = None
         self.scaler = None
         self.is_trained = False
+        self.lstm_available = False
 
         # Instant load mechanism: load pre-trained RF model if available on disk
         if os.path.exists(self.rf_model_path):
             self.load_rf_model(self.rf_model_path)
         else:
             self._init_fresh_rf_model()
+            
+        # Load pre-trained LSTM if available
+        if os.path.exists(self.lstm_model_path) and os.path.exists(self.lstm_scaler_path):
+            self.load_lstm_model()
+        else:
+            print("[NetworkAIEngine] Sequential LSTM forecaster unavailable. Must be trained.")
 
     def _init_fresh_rf_model(self):
         """Initializes a fresh RandomForestClassifier with exact hyperparameters."""
@@ -227,10 +238,33 @@ class NetworkAIEngine:
         print(f"Sequential LSTM forecaster successfully compiled (LSTM=50, Dropout=0.2, Dense=1, Loss=MSE, Optimizer=Adam).")
         return model
 
-    def train_lstm_forecaster(self, series=None, time_steps=None, epochs=5, batch_size=32):
+    def load_lstm_model(self):
+        """Loads a pre-trained LSTM model and scaler."""
+        try:
+            self.lstm_model = load_model(self.lstm_model_path)
+            self.scaler = joblib.load(self.lstm_scaler_path)
+            self.lstm_available = True
+            print(f"[NetworkAIEngine] Loaded pre-trained LSTM model from '{self.lstm_model_path}'.")
+            return True
+        except Exception as e:
+            print(f"[NetworkAIEngine] Failed to load LSTM model: {e}")
+            self.lstm_model = None
+            self.scaler = None
+            self.lstm_available = False
+            return False
+
+    def save_lstm_model(self):
+        """Saves the current trained LSTM model and scaler."""
+        if self.lstm_model is not None and self.scaler is not None:
+            self.lstm_model.save(self.lstm_model_path)
+            joblib.dump(self.scaler, self.lstm_scaler_path)
+            print(f"[NetworkAIEngine] Saved trained LSTM model and scaler.")
+            return True
+        return False
+
+    def train_lstm_forecaster(self, csv_path="latency_baseline.csv", time_steps=None, epochs=5, batch_size=32):
         """
-        Trains the sequential LSTM model using prepared 3D sliding window data.
-        If series is None, extracts continuous latency values from optimized_training_data.csv.
+        Trains the sequential LSTM model using genuine ICMP latency data.
         """
         steps = time_steps or self.time_steps
         self.time_steps = steps
@@ -238,60 +272,77 @@ class NetworkAIEngine:
         if self.lstm_model is None:
             self.build_lstm_forecaster(time_steps=steps, features=1)
 
-        if series is None:
-            csv_path = "optimized_training_data.csv"
-            if os.path.exists(csv_path):
-                df = pd.read_csv(csv_path)
-                df.columns = df.columns.str.strip()
-                
-                # Filter to only normal traffic
-                label_col = 'Attack Type' if 'Attack Type' in df.columns else 'Label'
-                if label_col in df.columns:
-                    df = df[df[label_col].astype(str).str.strip().isin(['Normal Traffic', 'BENIGN', '0', 'Normal'])]
-                    
-                # Derive realistic continuous latency metric from Flow Duration (scaled to ms)
-                raw_duration = df['Flow Duration'].fillna(0).values
-                series = np.clip(raw_duration / 1000.0, 5.0, 300.0)[:3000]
-            else:
-                np.random.seed(42)
-                t = np.linspace(0, 100, 1500)
-                series = 20.0 + 8.0 * np.sin(t) + np.random.normal(0, 1.5, 1500)
+        if not os.path.exists(csv_path):
+            print(f"[NetworkAIEngine] Latency dataset {csv_path} not found. LSTM cannot be trained.")
+            return False
 
-        # Initialize and apply MinMaxScaler
-        self.scaler = MinMaxScaler(feature_range=(0, 1))
-        series_scaled = self.scaler.fit_transform(np.array(series).reshape(-1, 1)).flatten()
+        try:
+            df = pd.read_csv(csv_path)
+            # Use only successful measurements with valid latency
+            df_valid = df[(df['success'] == 1) & (df['latency_ms'].notna())].copy()
+            if len(df_valid) < steps * 2:
+                print("[NetworkAIEngine] Insufficient valid latency data for training.")
+                return False
 
-        # Prepare 3D sliding window structure (samples, time steps, features)
-        X, y = prepare_sliding_window(series_scaled, time_steps=steps)
-        print(f"Sliding window structured: X={X.shape} (samples, time_steps, features), y={y.shape}")
+            series = df_valid['latency_ms'].values
 
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+            # Initialize MinMaxScaler
+            self.scaler = MinMaxScaler(feature_range=(0, 1))
+            
+            # Chronological train-test split before scaling to avoid data leakage
+            # e.g., 80% train, 20% test
+            train_size = int(len(series) * 0.8)
+            train_series = series[:train_size]
+            test_series = series[train_size:]
 
-        print(f"Fitting LSTM forecaster for {epochs} epochs (batch_size={batch_size})...")
-        self.lstm_model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size, verbose=1)
-        print("LSTM model training complete.")
+            # Fit scaler on training data only
+            train_scaled = self.scaler.fit_transform(train_series.reshape(-1, 1)).flatten()
+            test_scaled = self.scaler.transform(test_series.reshape(-1, 1)).flatten()
 
-        y_pred = self.lstm_model.predict(X_test, verbose=0)
-        
-        # Inverse transform to get true milliseconds before computing error metrics
-        y_test_inv = self.scaler.inverse_transform(y_test.reshape(-1, 1))
-        y_pred_inv = self.scaler.inverse_transform(y_pred.reshape(-1, 1))
-        
-        mae = mean_absolute_error(y_test_inv, y_pred_inv)
-        mse = mean_squared_error(y_test_inv, y_pred_inv)
-        rmse = np.sqrt(mse)
-        
-        mae_ms = mae / 1000.0
-        rmse_ms = rmse / 1000.0
+            # Prepare 3D sliding window structure
+            X_train, y_train = prepare_sliding_window(train_scaled, time_steps=steps)
+            X_test, y_test = prepare_sliding_window(test_scaled, time_steps=steps)
 
-        print("\n" + "=" * 55)
-        print("--- NATIVE LSTM SYSTEM FORECASTING EVALUATION ---")
-        print("=" * 55)
-        print(f"Mean Absolute Error (MAE)     : {mae_ms:.4f} ms")
-        print(f"Root Mean Square Error (RMSE) : {rmse_ms:.4f} ms")
-        print("=" * 55 + "\n")
+            print(f"Fitting LSTM forecaster for {epochs} epochs (batch_size={batch_size})...")
+            self.lstm_model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size, verbose=1)
+            print("LSTM model training complete.")
 
-        return X, y
+            y_pred = self.lstm_model.predict(X_test, verbose=0)
+            
+            # Inverse transform to get true milliseconds
+            y_test_inv = self.scaler.inverse_transform(y_test.reshape(-1, 1))
+            y_pred_inv = self.scaler.inverse_transform(y_pred.reshape(-1, 1))
+            
+            mae_ms = mean_absolute_error(y_test_inv, y_pred_inv)
+            mse = mean_squared_error(y_test_inv, y_pred_inv)
+            rmse_ms = np.sqrt(mse)
+
+            print("\n" + "=" * 55)
+            print("--- GENUINE LSTM LATENCY FORECASTING EVALUATION ---")
+            print("=" * 55)
+            print(f"Mean Absolute Error (MAE)     : {mae_ms:.4f} ms")
+            print(f"Root Mean Square Error (RMSE) : {rmse_ms:.4f} ms")
+            print("=" * 55 + "\n")
+
+            # Save evaluation results
+            eval_data = {
+                "observations": len(series),
+                "training_sequences": len(X_train),
+                "testing_sequences": len(X_test),
+                "mae_ms": float(mae_ms),
+                "rmse_ms": float(rmse_ms),
+                "trained_at": datetime.now().isoformat()
+            }
+            with open("lstm_evaluation.json", "w") as f:
+                json.dump(eval_data, f, indent=4)
+
+            self.lstm_available = True
+            self.save_lstm_model()
+            return True
+
+        except Exception as e:
+            print(f"[NetworkAIEngine] Failed to train LSTM: {e}")
+            return False
 
     def predict_latency(self, historical_latencies):
         """
@@ -302,10 +353,10 @@ class NetworkAIEngine:
             historical_latencies (list, np.ndarray): 1D array of recent latency measurements.
 
         Returns:
-            float: Short-term forecasted latency value.
+            float or None: Short-term forecasted latency value, or None if unavailable.
         """
-        if self.lstm_model is None:
-            self.build_lstm_forecaster(time_steps=self.time_steps, features=1)
+        if not self.lstm_available or self.lstm_model is None or self.scaler is None:
+            return None
 
         arr = np.asarray(historical_latencies, dtype=np.float32).flatten()
         steps = self.time_steps
@@ -319,22 +370,14 @@ class NetworkAIEngine:
         # Reshape to 3D sliding window for single prediction: (1, time_steps, 1)
         X_sample = arr.reshape(1, steps, 1)
         
-        # Scale the input sample if scaler exists
-        if hasattr(self, 'scaler') and self.scaler is not None:
+        try:
             X_sample_scaled = self.scaler.transform(X_sample.reshape(-1, 1)).reshape(1, steps, 1)
             predicted_val_scaled = self.lstm_model.predict(X_sample_scaled, verbose=0)
             predicted_val = self.scaler.inverse_transform(predicted_val_scaled)
-        else:
-            predicted_val = self.lstm_model.predict(X_sample, verbose=0)
-            
-        raw_pred = float(predicted_val[0][0])
-        # Smooth autoregressive adjustment if weights produce non-physical values
-        if raw_pred <= 0.0 or raw_pred > 500.0:
-            weights = np.linspace(0.6, 1.4, steps)
-            weights /= weights.sum()
-            recent_avg = float(np.dot(arr, weights))
-            raw_pred = recent_avg + float(np.mean(np.diff(arr[-3:])))
-        return round(float(max(5.0, raw_pred)), 2)
+            raw_pred = float(predicted_val[0][0])
+            return round(float(max(5.0, raw_pred)), 2)
+        except Exception:
+            return None
 
     def run_inference(self, live_row_df):
         """Runs real-time processing inference loop on incoming packet flow metrics."""
@@ -419,11 +462,14 @@ if __name__ == '__main__':
     # Step 2: Build & train Sequential LSTM Forecaster
     print("\n--- Building & Training LSTM Time-Series Forecaster ---")
     engine.build_lstm_forecaster(time_steps=10, features=1)
-    engine.train_lstm_forecaster(time_steps=10, epochs=3, batch_size=32)
+    engine.train_lstm_forecaster(csv_path="latency_baseline.csv", epochs=3, batch_size=32)
 
     # Step 3: Test short-term continuous latency forecasting
     print("\n--- Testing Short-Term Latency Forecasting ---")
     historical_window = [18.2, 19.5, 21.0, 20.4, 22.1, 23.8, 22.9, 24.5, 25.0, 24.8]
     forecasted_latency = engine.predict_latency(historical_window)
     print(f"Historical 1D latency window : {historical_window}")
-    print(f"Forecasted short-term latency: {forecasted_latency:.2f} ms (Type: {type(forecasted_latency).__name__})")
+    if forecasted_latency is not None:
+        print(f"Forecasted short-term latency: {forecasted_latency:.2f} ms (Type: {type(forecasted_latency).__name__})")
+    else:
+        print("Forecasted short-term latency: N/A (LSTM not trained)")

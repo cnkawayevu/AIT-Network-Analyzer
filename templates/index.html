@@ -398,6 +398,7 @@
                     backgroundColor: 'transparent',
                     borderWidth: 2, borderDash: [5, 5], tension: 0.3, fill: false,
                     pointRadius: 0, pointHoverRadius: 4,
+                    spanGaps: false,
                 },
                 {
                     label: 'Bandwidth Load (%)',
@@ -714,7 +715,8 @@
                     const jitter = safeNum(metrics.jitter ?? metrics.jitter_ms, 0);
                     const loss = safeNum(metrics.packet_loss ?? metrics.packet_loss_pct, 0);
                     const bandwidth = safeNum(metrics.bandwidth ?? metrics.bandwidth_utilization_pct, 0);
-                    const forecast = safeNum(data.forecasted_latency ?? predictions.forecasted_latency ?? latency);
+                    const forecastRaw = data.forecasted_latency ?? predictions.forecasted_latency ?? null;
+                    const forecast = (forecastRaw !== null && forecastRaw !== undefined) ? safeNum(forecastRaw) : null;
 
                     const systemState = data.system_state || 'OPTIMAL';
                     const diagnostic = data.diagnostic || '[INFO] Network traffic is smooth and normal.';
@@ -743,7 +745,17 @@
 
                     // ── Metric cards (Step 1.2: Override to rose-500 if breached) ───
                     setMetric('m-latency', latency.toFixed(1), 'ms', latency > 100);
-                    setMetric('m-forecast', forecast.toFixed(1), 'ms', forecast > 100);
+                    
+                    if (forecast !== null) {
+                        setMetric('m-forecast', forecast.toFixed(1), 'ms', forecast > 100);
+                    } else {
+                        const el = document.getElementById('m-forecast');
+                        if (el) {
+                            el.textContent = 'N/A';
+                            el.classList.remove('text-emerald-400', 'text-rose-500', 'text-cyan-400');
+                            el.classList.add('text-slate-500');
+                        }
+                    }
                     setMetric('m-jitter', jitter.toFixed(1), 'ms', jitter > 10);
                     setMetric('m-loss', loss.toFixed(2), '%', loss > 2);
                     setMetric('m-bandwidth', bandwidth.toFixed(1), '%', bandwidth > 85);

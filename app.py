@@ -14,12 +14,19 @@ app = Flask(__name__)
 
 # Initialize AI Research Engine matching Chapter 3 Framework
 ai_engine = NetworkAIEngine(rf_model_path="rf_model.joblib", time_steps=10)
-ai_engine.build_lstm_forecaster(time_steps=10, features=1)
 
 # Ensure pre-trained Random Forest model exists
 if not ai_engine.is_trained and os.path.exists("optimized_training_data.csv"):
     print("[app.py] Pre-training RandomForest on optimized_training_data.csv...")
     ai_engine.train_anomaly_detector("optimized_training_data.csv")
+
+# Ensure LSTM Forecaster exists or train it
+if not ai_engine.lstm_available:
+    if os.path.exists("latency_baseline.csv"):
+        print("[app.py] Training LSTM forecaster on latency_baseline.csv...")
+        ai_engine.train_lstm_forecaster("latency_baseline.csv")
+    else:
+        print("[app.py] WARNING: latency_baseline.csv not found. LSTM forecaster will remain unavailable.")
 
 # Rolling queue of historical latencies for 10-step LSTM sequential sliding window
 historical_latencies = [18.0] * 10
@@ -228,10 +235,7 @@ def get_telemetry():
     historical_latencies.pop(0)
     historical_latencies.append(current_latency)
 
-    try:
-        forecasted_latency = round(ai_engine.predict_latency(historical_latencies), 2)
-    except Exception:
-        forecasted_latency = round(float(current_latency * random.uniform(0.97, 1.05)), 2)
+    forecasted_latency = ai_engine.predict_latency(historical_latencies)
 
     # 3. Hybrid Explainability: RF security classification + raw performance thresholds
     #    Produces two XAI fields: a plain-language 'diagnostic' and a 'recommended_fix'.
