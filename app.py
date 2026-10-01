@@ -6,9 +6,14 @@ import time
 import threading
 import random
 import subprocess
+import json
+from datetime import datetime
 from scapy.all import sniff, IP
 from interface_selector import get_active_interface, get_active_ip
 from network_models import NetworkAIEngine
+import database as db
+
+db.init_db()
 
 app = Flask(__name__)
 
@@ -56,7 +61,63 @@ packet_count = 0
 
 last_check_time = time.time()
 data_lock = threading.Lock()
+session_lock = threading.Lock()
 is_monitoring = False
+current_session_id = None
+
+def evaluate_health(rf_classification, latency_ms, packet_loss_pct):
+    alerts = []
+    
+    if rf_classification == 'Abnormal':
+        alerts.append({
+            "alert_type": "AI_ANOMALY",
+            "severity": "CRITICAL",
+            "diagnostic": "[AI ALERT] Unusual traffic pattern detected! This looks like a network attack or strange behavior.",
+            "recommended_fix": "How to fix: Check your connected devices for unwanted users. Look at your firewall logs to see blocked connections, and disconnect the affected computers to be safe."
+        })
+        
+    if latency_ms is not None and latency_ms > 80.0:
+        alerts.append({
+            "alert_type": "HIGH_LATENCY",
+            "severity": "DEGRADED",
+            "diagnostic": "[PERF ALERT] High latency is causing a network delay.",
+            "recommended_fix": "How to fix: Find out which apps or users are downloading large files and limit their speed (traffic shaping)."
+        })
+        
+    if packet_loss_pct is not None and packet_loss_pct > 2.0:
+        alerts.append({
+            "alert_type": "PACKET_LOSS",
+            "severity": "DEGRADED",
+            "diagnostic": "[PERF ALERT] Too many data packets are getting lost (over 2%). This forces the network to keep resending data, making things slow.",
+            "recommended_fix": "How to fix: Check for damaged network cables or loose plugs. Make sure router and switch settings match perfectly on both ends (check duplex settings)."
+        })
+        
+    if any(a["severity"] == "CRITICAL" for a in alerts):
+        system_state = "CRITICAL"
+    elif any(a["severity"] == "DEGRADED" for a in alerts):
+        system_state = "DEGRADED"
+    else:
+        system_state = "OPTIMAL"
+        
+    if any(a["alert_type"] == "AI_ANOMALY" for a in alerts):
+        diagnostic = "[AI ALERT] Unusual traffic pattern detected! This looks like a network attack or strange behavior."
+        recommended_fix = "How to fix: Check your connected devices for unwanted users. Look at your firewall logs to see blocked connections, and disconnect the affected computers to be safe."
+    elif any(a["alert_type"] == "HIGH_LATENCY" for a in alerts):
+        diagnostic = "[PERF ALERT] High latency is causing a network delay."
+        recommended_fix = "How to fix: Find out which apps or users are downloading large files and limit their speed (traffic shaping)."
+    elif any(a["alert_type"] == "PACKET_LOSS" for a in alerts):
+        diagnostic = "[PERF ALERT] Too many data packets are getting lost (over 2%). This forces the network to keep resending data, making things slow."
+        recommended_fix = "How to fix: Check for damaged network cables or loose plugs. Make sure router and switch settings match perfectly on both ends (check duplex settings)."
+    else:
+        diagnostic = "[INFO] Network traffic is smooth and normal."
+        recommended_fix = ""
+        
+    return {
+        "system_state": system_state,
+        "diagnostic": diagnostic,
+        "recommended_fix": recommended_fix,
+        "alerts": alerts
+    }
 
 # Resolve the best active physical interface once at startup
 ACTIVE_IFACE = get_active_interface()   # e.g. "WiFi" or "Ethernet"; None = all interfaces
@@ -244,29 +305,12 @@ def track_performance_metrics():
         forecasted_latency = ai_engine.predict_latency(historical_latencies)
 
         # 5. Hybrid Explainability: RF security classification + raw performance thresholds
+        health_status = evaluate_health(rf_classification, latency_val, packet_loss_pct)
+        system_state = health_status["system_state"]
+        diagnostic = health_status["diagnostic"]
+        recommended_fix = health_status["recommended_fix"]
+        active_alerts = health_status["alerts"]
         anomaly_state = 1 if rf_classification == 'Abnormal' else 0
-
-        if anomaly_state == 1:
-            system_state = 'CRITICAL'
-            diagnostic = '[AI ALERT] Unusual traffic pattern detected! This looks like a network attack or strange behavior.'
-            recommended_fix = ('How to fix: Check your connected devices for unwanted users. '
-                               'Look at your firewall logs to see blocked connections, '
-                               'and disconnect the affected computers to be safe.')
-        elif latency_val is not None and latency_val > 80.0:
-            system_state = 'DEGRADED'
-            diagnostic = '[PERF ALERT] High latency is causing a network delay.'
-            recommended_fix = ('How to fix: Find out which apps or users are downloading large files '
-                               'and limit their speed (traffic shaping).')
-        elif packet_loss_pct is not None and packet_loss_pct > 2.0:
-            system_state = 'DEGRADED'
-            diagnostic = '[PERF ALERT] Too many data packets are getting lost (over 2%). This forces the network to keep resending data, making things slow.'
-            recommended_fix = ('How to fix: Check for damaged network cables or loose plugs. '
-                               'Make sure router and switch settings match perfectly on both ends '
-                               '(check duplex settings).')
-        else:
-            system_state = 'OPTIMAL'
-            diagnostic = '[INFO] Network traffic is smooth and normal.'
-            recommended_fix = ''
 
         batch_counter += 1
         latest_completed_batch = {
@@ -306,6 +350,39 @@ def track_performance_metrics():
             }
         }
 
+        with session_lock:
+            if is_monitoring and current_session_id is not None:
+                sid = current_session_id
+                ts = datetime.utcnow().isoformat()
+                
+                db.db_queue.put(('telemetry', (
+                    sid,
+                    batch_counter,
+                    ts,
+                    latency_val,
+                    jitter_val,
+                    packet_loss_pct,
+                    throughput_mbps,
+                    forecasted_latency,
+                    rf_classification,
+                    system_state,
+                    diagnostic,
+                    recommended_fix,
+                    json.dumps(live_features)
+                )))
+
+                for alert in active_alerts:
+                    db.db_queue.put(('alerts', (
+                        sid, 
+                        batch_counter, 
+                        ts, 
+                        alert["alert_type"], 
+                        alert["severity"], 
+                        alert["diagnostic"], 
+                        alert["recommended_fix"]
+                    )))
+
+
 # Spin up concurrent hardware background execution threads
 threading.Thread(target=live_packet_sniffer, daemon=True).start()
 threading.Thread(target=track_performance_metrics, daemon=True).start()
@@ -320,15 +397,37 @@ def console():
 @app.route('/api/control', methods=['POST'])
 def control():
     """Toggles background network monitoring."""
-    global is_monitoring
+    global is_monitoring, current_session_id
     data = request.get_json()
     if data and "action" in data:
         if data["action"] == "start":
-            is_monitoring = True
-            return jsonify({"status": "success", "is_monitoring": True})
+            with session_lock:
+                if is_monitoring:
+                    return jsonify({"status": "success", "is_monitoring": True, "session_id": current_session_id})
+                try:
+                    new_id = db.start_session()
+                    current_session_id = new_id
+                    is_monitoring = True
+                    return jsonify({"status": "success", "is_monitoring": True, "session_id": current_session_id})
+                except Exception as e:
+                    return jsonify({"status": "error", "message": "Failed to start DB session"}), 500
+
         elif data["action"] == "stop":
-            is_monitoring = False
-            return jsonify({"status": "success", "is_monitoring": False})
+            with session_lock:
+                if not is_monitoring or current_session_id is None:
+                    return jsonify({"status": "success", "is_monitoring": False})
+                
+                sid = current_session_id
+                is_monitoring = False
+                
+                try:
+                    db.stop_session(sid)
+                    current_session_id = None
+                    return jsonify({"status": "success", "is_monitoring": False, "session_id": sid})
+                except Exception as e:
+                    print(f"[app.py] Error finalizing session: {e}")
+                    return jsonify({"status": "error", "message": "Failed to finalize DB session"}), 500
+
     return jsonify({"status": "error", "message": "Invalid payload"}), 400
 
 
@@ -370,6 +469,18 @@ def get_telemetry():
         
     return jsonify(latest_completed_batch)
 
+
+@app.route('/api/sessions')
+def list_sessions():
+    return jsonify({"status": "success", "sessions": db.get_recent_sessions()})
+
+
+@app.route('/api/session/<int:session_id>')
+def session_details(session_id):
+    details = db.get_session_details(session_id)
+    if not details:
+        return jsonify({"status": "error", "message": "Session not found"}), 404
+    return jsonify({"status": "success", "data": details})
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000, use_reloader=False)

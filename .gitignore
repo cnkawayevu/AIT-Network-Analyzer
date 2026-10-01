@@ -3,3 +3,7 @@ __pycache__/
 *.pyc
 .DS_Store
 cicids2017_sample.csv
+# SQLite
+*.db
+*.db-wal
+*.db-shm
