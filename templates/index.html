@@ -150,8 +150,7 @@
                     <p class="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1">Live Latency</p>
                     <p id="m-latency" class="metric-val text-3xl font-bold font-mono text-cyan-400 tabular-nums">-- ms
                     </p>
-                    <p class="mt-2 text-[10px] text-slate-500 uppercase tracking-wider font-semibold">ICMP Gateway
-                        Transit</p>
+                    <p class="mt-2 text-[10px] text-slate-500 uppercase tracking-wider font-semibold">ICMP RTT TO 1.1.1.1</p>
                 </div>
 
                 <div
@@ -162,7 +161,7 @@
                     <p class="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1">LSTM Forecast</p>
                     <p id="m-forecast" class="metric-val text-3xl font-bold font-mono text-emerald-400 tabular-nums">--
                         ms</p>
-                    <p class="mt-2 text-[10px] text-slate-500 uppercase tracking-wider font-semibold">10-Step Trend</p>
+                    <p class="mt-2 text-[10px] text-slate-500 uppercase tracking-wider font-semibold">ONE-STEP-AHEAD FORECAST</p>
                 </div>
 
                 <div
@@ -173,8 +172,7 @@
                     <p class="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1">Jitter</p>
                     <p id="m-jitter" class="metric-val text-3xl font-bold font-mono text-cyan-400 tabular-nums">-- ms
                     </p>
-                    <p class="mt-2 text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Variance
-                        Dispersion</p>
+                    <p class="mt-2 text-[10px] text-slate-500 uppercase tracking-wider font-semibold">ICMP RTT VARIATION</p>
                 </div>
 
                 <div
@@ -184,8 +182,7 @@
                     </div>
                     <p class="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1">Packet Loss</p>
                     <p id="m-loss" class="metric-val text-3xl font-bold font-mono text-cyan-400 tabular-nums">-- %</p>
-                    <p class="mt-2 text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Drop Degradation
-                    </p>
+                    <p class="mt-2 text-[10px] text-slate-500 uppercase tracking-wider font-semibold">ICMP PROBE LOSS</p>
                 </div>
 
                 <div
@@ -193,11 +190,10 @@
                     <div
                         class="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-cyan-500/20 to-transparent group-hover:via-cyan-500/50 transition-all">
                     </div>
-                    <p class="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1">Bandwidth Load</p>
-                    <p id="m-bandwidth" class="metric-val text-3xl font-bold font-mono text-cyan-400 tabular-nums">-- %
+                    <p class="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1">Throughput</p>
+                    <p id="m-bandwidth" class="metric-val text-3xl font-bold font-mono text-cyan-400 tabular-nums">-- Mbps
                     </p>
-                    <p class="mt-2 text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Socket PPS
-                        Throughput</p>
+                    <p class="mt-2 text-[10px] text-slate-500 uppercase tracking-wider font-semibold">CAPTURED HOST TRAFFIC</p>
                 </div>
             </section>
 
@@ -401,7 +397,7 @@
                     spanGaps: false,
                 },
                 {
-                    label: 'Bandwidth Load (%)',
+                    label: 'Throughput (Mbps)',
                     data: [],
                     borderColor: '#818cf8', // indigo-400
                     backgroundColor: 'transparent',
@@ -487,14 +483,14 @@
         let sessionStartTime = null;
         let totalAlerts = 0;
         let latencyArray = [];
-        let alertCounts = { bandwidth: 0, packet_loss: 0, anomaly: 0 };
+        let alertCounts = { latency_delay: 0, packet_loss: 0, anomaly: 0 };
         let sessionAlertsHistory = [];
 
         function resetSessionState() {
             sessionStartTime = null;
             totalAlerts = 0;
             latencyArray = [];
-            alertCounts = { bandwidth: 0, packet_loss: 0, anomaly: 0 };
+            alertCounts = { latency_delay: 0, packet_loss: 0, anomaly: 0 };
             sessionAlertsHistory = [];
         }
 
@@ -559,28 +555,28 @@
         function buildAnalyticsTab() {
             const durationMs = sessionStartTime ? (Date.now() - sessionStartTime) : 0;
             const avgLatency = latencyArray.length > 0
-                ? (latencyArray.reduce((a, b) => a + b, 0) / latencyArray.length).toFixed(1)
-                : '0.0';
+                ? (latencyArray.reduce((a, b) => a + b, 0) / latencyArray.length).toFixed(1) + ' ms'
+                : 'N/A';
 
             // Summary cards
             document.getElementById('an-duration').textContent = formatDuration(durationMs);
             document.getElementById('an-total-alerts').textContent = totalAlerts;
             document.getElementById('an-anomalies').textContent = alertCounts.anomaly;
-            document.getElementById('an-avg-latency').textContent = avgLatency + ' ms';
+            document.getElementById('an-avg-latency').textContent = avgLatency;
 
             // Destroy old pie chart
             if (pieChartRef) { pieChartRef.destroy(); pieChartRef = null; }
 
             const pieCtx = document.getElementById('analytics-pie-chart').getContext('2d');
-            const totalTypes = alertCounts.anomaly + alertCounts.bandwidth + alertCounts.packet_loss;
+            const totalTypes = alertCounts.anomaly + alertCounts.latency_delay + alertCounts.packet_loss;
 
             // Doughnut configuration (Left Column 1/3)
             pieChartRef = new Chart(pieCtx, {
                 type: 'doughnut',
                 data: {
-                    labels: ['AI Anomaly', 'Bandwidth Bottleneck', 'Packet Loss'],
+                    labels: ['AI Anomaly', 'Latency Delay', 'Packet Loss'],
                     datasets: [{
-                        data: totalTypes > 0 ? [alertCounts.anomaly, alertCounts.bandwidth, alertCounts.packet_loss] : [1, 0, 0],
+                        data: totalTypes > 0 ? [alertCounts.anomaly, alertCounts.latency_delay, alertCounts.packet_loss] : [1, 0, 0],
                         backgroundColor: totalTypes > 0 ? ['#f43f5e', '#f59e0b', '#f97316'] : ['#1e293b', '#1e293b', '#1e293b'],
                         borderColor: '#0f172a',
                         borderWidth: 4,
@@ -620,10 +616,10 @@
                     <td class="px-5 py-3 text-right ${alertCounts.anomaly > 0 ? 'text-rose-500' : 'text-slate-500'}">${alertCounts.anomaly > 0 ? 'Breached' : 'Nominal'}</td>
                 </tr>
                 <tr class="hover:bg-slate-800/30 transition-colors">
-                    <td class="px-5 py-3 text-amber-400 font-semibold">Bandwidth Bottleneck</td>
-                    <td class="px-5 py-3 text-center text-slate-300">${alertCounts.bandwidth}</td>
-                    <td class="px-5 py-3"><span class="px-2 py-1 rounded text-[10px] uppercase font-bold tracking-wider ${alertCounts.bandwidth > 0 ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30' : 'bg-slate-800 text-slate-500'}">DEGRADED</span></td>
-                    <td class="px-5 py-3 text-right ${alertCounts.bandwidth > 0 ? 'text-amber-500' : 'text-slate-500'}">${alertCounts.bandwidth > 0 ? 'Saturated' : 'Nominal'}</td>
+                    <td class="px-5 py-3 text-amber-400 font-semibold">High Latency Delay</td>
+                    <td class="px-5 py-3 text-center text-slate-300">${alertCounts.latency_delay}</td>
+                    <td class="px-5 py-3"><span class="px-2 py-1 rounded text-[10px] uppercase font-bold tracking-wider ${alertCounts.latency_delay > 0 ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30' : 'bg-slate-800 text-slate-500'}">DEGRADED</span></td>
+                    <td class="px-5 py-3 text-right ${alertCounts.latency_delay > 0 ? 'text-amber-500' : 'text-slate-500'}">${alertCounts.latency_delay > 0 ? 'Delayed' : 'Nominal'}</td>
                 </tr>
                 <tr class="hover:bg-slate-800/30 transition-colors">
                     <td class="px-5 py-3 text-orange-400 font-semibold">Packet Loss</td>
@@ -711,10 +707,16 @@
                     const metrics = data.metrics || {};
                     const predictions = data.predictions || {};
 
-                    const latency = safeNum(metrics.latency ?? metrics.latency_ms, 0);
-                    const jitter = safeNum(metrics.jitter ?? metrics.jitter_ms, 0);
-                    const loss = safeNum(metrics.packet_loss ?? metrics.packet_loss_pct, 0);
-                    const bandwidth = safeNum(metrics.bandwidth ?? metrics.bandwidth_utilization_pct, 0);
+                    const latencyRaw = metrics.latency ?? metrics.latency_ms ?? null;
+                    const latency = (latencyRaw !== null && latencyRaw !== undefined) ? safeNum(latencyRaw) : null;
+                    
+                    const jitterRaw = metrics.jitter ?? metrics.jitter_ms ?? null;
+                    const jitter = (jitterRaw !== null && jitterRaw !== undefined) ? safeNum(jitterRaw) : null;
+                    
+                    const lossRaw = metrics.packet_loss ?? metrics.packet_loss_pct ?? null;
+                    const loss = (lossRaw !== null && lossRaw !== undefined) ? safeNum(lossRaw) : null;
+                    
+                    const bandwidth = safeNum(metrics.throughput_mbps ?? metrics.bandwidth ?? metrics.bandwidth_utilization_pct, 0);
                     const forecastRaw = data.forecasted_latency ?? predictions.forecasted_latency ?? null;
                     const forecast = (forecastRaw !== null && forecastRaw !== undefined) ? safeNum(forecastRaw) : null;
 
@@ -725,7 +727,7 @@
                     const timeLabel = nowLabel();
 
                     // ── Track session data ───────────────────────────────────────────
-                    latencyArray.push(latency);
+                    if (latency !== null) latencyArray.push(latency);
 
                     if (systemState === 'CRITICAL') {
                         totalAlerts++;
@@ -733,10 +735,9 @@
                         sessionAlertsHistory.push({ timestamp: timeLabel, state: systemState, diagnostic, fix: recommendedFix });
                     } else if (systemState === 'DEGRADED') {
                         totalAlerts++;
-                        if (diagnostic.toLowerCase().includes('bottleneck') ||
-                            diagnostic.toLowerCase().includes('bandwidth') ||
-                            diagnostic.toLowerCase().includes('traffic')) {
-                            alertCounts.bandwidth++;
+                        if (diagnostic.toLowerCase().includes('latency') ||
+                            diagnostic.toLowerCase().includes('delay')) {
+                            alertCounts.latency_delay++;
                         } else {
                             alertCounts.packet_loss++;
                         }
@@ -744,10 +745,19 @@
                     }
 
                     // ── Metric cards (Step 1.2: Override to rose-500 if breached) ───
-                    setMetric('m-latency', latency.toFixed(1), 'ms', latency > 100);
+                    if (latency !== null) {
+                        setMetric('m-latency', latency.toFixed(1), 'ms', false);
+                    } else {
+                        const el = document.getElementById('m-latency');
+                        if (el) {
+                            el.textContent = 'N/A';
+                            el.classList.remove('text-emerald-400', 'text-rose-500', 'text-cyan-400');
+                            el.classList.add('text-slate-500');
+                        }
+                    }
                     
                     if (forecast !== null) {
-                        setMetric('m-forecast', forecast.toFixed(1), 'ms', forecast > 100);
+                        setMetric('m-forecast', forecast.toFixed(1), 'ms', false);
                     } else {
                         const el = document.getElementById('m-forecast');
                         if (el) {
@@ -756,9 +766,30 @@
                             el.classList.add('text-slate-500');
                         }
                     }
-                    setMetric('m-jitter', jitter.toFixed(1), 'ms', jitter > 10);
-                    setMetric('m-loss', loss.toFixed(2), '%', loss > 2);
-                    setMetric('m-bandwidth', bandwidth.toFixed(1), '%', bandwidth > 85);
+                    
+                    if (jitter !== null) {
+                        setMetric('m-jitter', jitter.toFixed(1), 'ms', false);
+                    } else {
+                        const el = document.getElementById('m-jitter');
+                        if (el) {
+                            el.textContent = 'N/A';
+                            el.classList.remove('text-emerald-400', 'text-rose-500', 'text-cyan-400');
+                            el.classList.add('text-slate-500');
+                        }
+                    }
+                    
+                    if (loss !== null) {
+                        setMetric('m-loss', loss.toFixed(2), '%', false);
+                    } else {
+                        const el = document.getElementById('m-loss');
+                        if (el) {
+                            el.textContent = 'N/A';
+                            el.classList.remove('text-emerald-400', 'text-rose-500', 'text-cyan-400');
+                            el.classList.add('text-slate-500');
+                        }
+                    }
+                    
+                    setMetric('m-bandwidth', bandwidth.toFixed(1), 'Mbps', false);
 
                     // ── Chart.js line data push ──────────────────────────────────────
                     if (chartData.labels.length >= MAX_POINTS) {

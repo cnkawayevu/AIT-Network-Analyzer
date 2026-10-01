@@ -156,3 +156,12 @@ def get_active_interface() -> str | None:
         f"(IP: {best['ip']})"
     )
     return best["name"]
+
+def get_active_ip() -> str | None:
+    adapters = _query_netsh_addresses()
+    if not adapters:
+        return None
+    preferred = [a for a in adapters if any(k in a["name"].lower() for k in PREFERRED_KEYWORDS)]
+    pool = preferred if preferred else adapters
+    pool.sort(key=lambda a: a["score"], reverse=True)
+    return pool[0]["ip"]

@@ -7,7 +7,7 @@ import threading
 import random
 import subprocess
 from scapy.all import sniff, IP
-from interface_selector import get_active_interface
+from interface_selector import get_active_interface, get_active_ip
 from network_models import NetworkAIEngine
 
 app = Flask(__name__)
@@ -28,27 +28,39 @@ if not ai_engine.lstm_available:
     else:
         print("[app.py] WARNING: latency_baseline.csv not found. LSTM forecaster will remain unavailable.")
 
-# Rolling queue of historical latencies for 10-step LSTM sequential sliding window
-historical_latencies = [18.0] * 10
+# Rolling queues for QoS metric generation
+historical_latencies = []
+historical_ping_results = []
+historical_valid_rtts = []
 
-# Core Global Network Metrics State Engine
+latest_completed_batch = None
+batch_counter = 0
+
+# Core Global Network Metrics State Engine (Fallback until first batch)
 network_metrics = {
-    "latency": 20.0,
-    "jitter": 2.5,
-    "packet_loss": 0.1,
-    "bandwidth": 15.0,
+    "latency": None,
+    "jitter": None,
+    "packet_loss": None,
+    "throughput_mbps": 0.0,
     "anomaly_flag": 0,
     "diagnostic_report": "Network traffic is stable."
 }
 
+# Live packet capture aggregates (interval reset)
+captured_bytes = 0
+fwd_lengths = []
+bwd_lengths = []
+first_packet_time = None
+last_packet_time = None
 packet_count = 0
-packet_lengths = [64]
+
 last_check_time = time.time()
 data_lock = threading.Lock()
 is_monitoring = False
 
 # Resolve the best active physical interface once at startup
 ACTIVE_IFACE = get_active_interface()   # e.g. "WiFi" or "Ethernet"; None = all interfaces
+ACTIVE_IP = get_active_ip()
 
 
 def live_packet_sniffer():
@@ -57,18 +69,31 @@ def live_packet_sniffer():
     Binds scapy's sniff() exclusively to the auto-detected physical interface.
     Logs terminal errors on interface drops without crashing the Flask server.
     """
-    global packet_count, packet_lengths
+    global packet_count, captured_bytes, fwd_lengths, bwd_lengths, first_packet_time, last_packet_time
 
     def process_packet(packet):
-        global packet_count, packet_lengths, is_monitoring
+        global packet_count, captured_bytes, fwd_lengths, bwd_lengths, first_packet_time, last_packet_time, is_monitoring
         if not is_monitoring:
             return
         if packet.haslayer(IP):
-            with data_lock:
-                packet_count += 1
-                packet_lengths.append(len(packet))
-                if len(packet_lengths) > 100:
-                    packet_lengths.pop(0)
+            ip_src = packet[IP].src
+            ip_dst = packet[IP].dst
+            pkt_len = len(packet)
+            pkt_time = float(packet.time)
+            
+            if ip_src == ACTIVE_IP or ip_dst == ACTIVE_IP:
+                with data_lock:
+                    packet_count += 1
+                    captured_bytes += pkt_len
+                    
+                    if first_packet_time is None:
+                        first_packet_time = pkt_time
+                    last_packet_time = pkt_time
+
+                    if ip_src == ACTIVE_IP:
+                        fwd_lengths.append(pkt_len)
+                    elif ip_dst == ACTIVE_IP:
+                        bwd_lengths.append(pkt_len)
 
     iface_label = ACTIVE_IFACE if ACTIVE_IFACE else "ALL interfaces (fallback)"
     print(f"[sniffer] Starting packet capture on interface: {iface_label}")
@@ -93,39 +118,54 @@ def live_packet_sniffer():
 
 def track_performance_metrics():
     """Calculates true dynamic QoS network performance values periodically."""
-    global packet_count, last_check_time, network_metrics, packet_lengths, is_monitoring, historical_latencies
+    global packet_count, captured_bytes, fwd_lengths, bwd_lengths, first_packet_time, last_packet_time
+    global last_check_time, latest_completed_batch, batch_counter, is_monitoring
+    global historical_latencies, historical_ping_results, historical_valid_rtts
 
     while True:
         time.sleep(2)
         if not is_monitoring:
             with data_lock:
                 packet_count = 0
-                packet_lengths = [64]
-                historical_latencies = [18.0] * 10
+                captured_bytes = 0
+                fwd_lengths = []
+                bwd_lengths = []
+                first_packet_time = None
+                last_packet_time = None
+                historical_latencies = []
+                historical_ping_results = []
+                historical_valid_rtts = []
                 last_check_time = time.time()
-                network_metrics = {
-                    "latency": 20.0,
-                    "jitter": 2.5,
-                    "packet_loss": 0.1,
-                    "bandwidth": 15.0,
-                    "anomaly_flag": 0,
-                    "diagnostic_report": "Network traffic is stable."
-                }
+                latest_completed_batch = None
+                batch_counter = 0
             continue
 
         current_time = time.time()
         elapsed = current_time - last_check_time
 
-        # 1. Calculate Actual Bandwidth Utilization from live packet count
         with data_lock:
-            current_pps = packet_count / elapsed if elapsed > 0 else 0
+            snap_bytes = captured_bytes
+            
+            captured_bytes = 0
             packet_count = 0
+            
+            snap_fwd = list(fwd_lengths)
+            snap_bwd = list(bwd_lengths)
+            snap_first_time = first_packet_time
+            snap_last_time = last_packet_time
+
+            fwd_lengths = []
+            bwd_lengths = []
+            first_packet_time = None
+            last_packet_time = None
             last_check_time = current_time
 
-        # Scale packet rate to a percentage representation of network load
-        simulated_load = round(min(98.5, max(8.5, (current_pps * 0.15) + random.uniform(1.0, 4.0))), 1)
+        # 1. Throughput calculation
+        throughput_bps = (snap_bytes * 8) / elapsed if elapsed > 0 else 0.0
+        throughput_mbps = round(throughput_bps / 1_000_000.0, 2)
 
         # 2. Query True System Latency via ICMP Ping
+        latency_val = None
         try:
             startupinfo = subprocess.STARTUPINFO()
             startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
@@ -138,25 +178,133 @@ def track_performance_metrics():
             if "time=" in output:
                 time_str = output.split("time=")[1].split("ms")[0].strip()
                 latency_val = float(time_str)
-            else:
-                latency_val = round(random.uniform(14.0, 24.0), 2)
         except Exception:
-            latency_val = round(random.uniform(15.0, 28.0), 2)
+            pass
 
-        # 3. Micro-anomaly threshold detection
-        anomaly = 0
-        loss_val = round(random.uniform(0.0, 0.4), 2)
-        if latency_val > 80.0 or simulated_load > 85.0:
-            anomaly = 1
-            loss_val = round(random.uniform(4.2, 12.5), 2)
+        if latency_val is not None:
+            if len(historical_ping_results) >= 10: historical_ping_results.pop(0)
+            historical_ping_results.append(0)
+            if len(historical_valid_rtts) >= 10: historical_valid_rtts.pop(0)
+            historical_valid_rtts.append(latency_val)
+        else:
+            if len(historical_ping_results) >= 10: historical_ping_results.pop(0)
+            historical_ping_results.append(1)
 
-        # Update the live memory state
-        network_metrics["latency"] = round(latency_val, 2)
-        network_metrics["jitter"] = round(random.uniform(1.2, 4.2), 2)
-        network_metrics["packet_loss"] = loss_val
-        network_metrics["bandwidth"] = simulated_load
-        network_metrics["anomaly_flag"] = anomaly
+        packet_loss_pct = None
+        if len(historical_ping_results) > 0:
+            packet_loss_pct = round((sum(historical_ping_results) / len(historical_ping_results)) * 100.0, 2)
 
+        jitter_val = None
+        if len(historical_valid_rtts) >= 2:
+            diffs = [abs(historical_valid_rtts[i] - historical_valid_rtts[i-1]) for i in range(1, len(historical_valid_rtts))]
+            jitter_val = round(sum(diffs) / len(diffs), 2)
+
+        # 3. RF Feature Extraction (OUTSIDE the lock)
+        if snap_first_time is not None and snap_last_time is not None:
+            flow_duration_us = (snap_last_time - snap_first_time) * 1_000_000.0
+        else:
+            flow_duration_us = 0.0
+
+        total_fwd_packets = float(len(snap_fwd))
+        total_bwd_packets = float(len(snap_bwd))
+        total_packets = total_fwd_packets + total_bwd_packets
+
+        bwd_packets_per_sec = total_bwd_packets / elapsed if elapsed > 0 else 0.0
+        flow_packets_per_sec = total_packets / elapsed if elapsed > 0 else 0.0
+
+        total_fwd_bytes = sum(snap_fwd)
+        total_bwd_bytes = sum(snap_bwd)
+        flow_bytes_per_sec = (total_fwd_bytes + total_bwd_bytes) / elapsed if elapsed > 0 else 0.0
+
+        fwd_len_max = float(max(snap_fwd)) if snap_fwd else 0.0
+        fwd_len_min = float(min(snap_fwd)) if snap_fwd else 0.0
+        bwd_len_max = float(max(snap_bwd)) if snap_bwd else 0.0
+        bwd_len_min = float(min(snap_bwd)) if snap_bwd else 0.0
+
+        live_features = [
+            flow_duration_us,
+            total_fwd_packets,
+            bwd_packets_per_sec,
+            fwd_len_max,
+            fwd_len_min,
+            bwd_len_max,
+            bwd_len_min,
+            flow_packets_per_sec,
+            flow_bytes_per_sec
+        ]
+
+        # 4. ML Inference
+        rf_classification = ai_engine.predict(live_features)
+
+        if latency_val is not None:
+            if len(historical_latencies) >= 10:
+                historical_latencies.pop(0)
+            historical_latencies.append(latency_val)
+
+        forecasted_latency = ai_engine.predict_latency(historical_latencies)
+
+        # 5. Hybrid Explainability: RF security classification + raw performance thresholds
+        anomaly_state = 1 if rf_classification == 'Abnormal' else 0
+
+        if anomaly_state == 1:
+            system_state = 'CRITICAL'
+            diagnostic = '[AI ALERT] Unusual traffic pattern detected! This looks like a network attack or strange behavior.'
+            recommended_fix = ('How to fix: Check your connected devices for unwanted users. '
+                               'Look at your firewall logs to see blocked connections, '
+                               'and disconnect the affected computers to be safe.')
+        elif latency_val is not None and latency_val > 80.0:
+            system_state = 'DEGRADED'
+            diagnostic = '[PERF ALERT] High latency is causing a network delay.'
+            recommended_fix = ('How to fix: Find out which apps or users are downloading large files '
+                               'and limit their speed (traffic shaping).')
+        elif packet_loss_pct is not None and packet_loss_pct > 2.0:
+            system_state = 'DEGRADED'
+            diagnostic = '[PERF ALERT] Too many data packets are getting lost (over 2%). This forces the network to keep resending data, making things slow.'
+            recommended_fix = ('How to fix: Check for damaged network cables or loose plugs. '
+                               'Make sure router and switch settings match perfectly on both ends '
+                               '(check duplex settings).')
+        else:
+            system_state = 'OPTIMAL'
+            diagnostic = '[INFO] Network traffic is smooth and normal.'
+            recommended_fix = ''
+
+        batch_counter += 1
+        latest_completed_batch = {
+            "batch_id": batch_counter,
+            "status": "success",
+            "timestamp": int(time.time()),
+            "system_state": system_state,
+            "metrics": {
+                "latency": latency_val,
+                "latency_ms": latency_val,
+                "jitter": jitter_val,
+                "jitter_ms": jitter_val,
+                "packet_loss": packet_loss_pct,
+                "packet_loss_pct": packet_loss_pct,
+                "throughput_mbps": throughput_mbps,
+            },
+            "predictions": {
+                "classification": rf_classification,
+                "is_anomaly": (rf_classification == 'Abnormal'),
+                "forecasted_latency": forecasted_latency
+            },
+            "classification": rf_classification,
+            "forecasted_latency": forecasted_latency,
+            "diagnostic": diagnostic,
+            "recommended_fix": recommended_fix,
+            "payload": {
+                "metrics": {
+                    "latency_ms": latency_val,
+                    "jitter_ms": jitter_val,
+                    "packet_loss_pct": packet_loss_pct,
+                    "bandwidth_utilization_pct": throughput_mbps
+                },
+                "analysis": {
+                    "anomaly_state": anomaly_state,
+                    "root_cause_explanation": diagnostic
+                }
+            }
+        }
 
 # Spin up concurrent hardware background execution threads
 threading.Thread(target=live_packet_sniffer, daemon=True).start()
@@ -189,118 +337,38 @@ def control():
 def get_telemetry():
     """Combined JSON API route serving live metrics and AI model predictions.
 
-    Ingests live packet metrics from the active Scapy sniffer, passes them
-    through the loaded NetworkAIEngine Random Forest and sequential LSTM models,
-    and returns live metrics, classifications, forecasts, and explainability output.
+    Reads the latest completed micro-batch to ensure coherent single-inference reporting.
     """
-    global historical_latencies
-
-    current_latency = network_metrics["latency"]
-    current_jitter = network_metrics["jitter"]
-    current_loss = network_metrics["packet_loss"]
-    current_bandwidth = network_metrics["bandwidth"]
-
-    # 1. Prepare 1D live packet feature vector for RandomForest model:
-    # ['Flow Duration', 'Total Fwd Packets', 'Bwd Packets/s', 'Fwd Packet Length Max',
-    #  'Fwd Packet Length Min', 'Bwd Packet Length Max', 'Bwd Packet Length Min',
-    #  'Flow Packets/s', 'Flow Bytes/s']
-    with data_lock:
-        lens = list(packet_lengths) if packet_lengths else [64]
-
-    max_len = max(lens)
-    min_len = min(lens)
-    flow_duration = max(100.0, current_latency * 1000.0)
-    pps_rate = max(1.0, current_bandwidth * 2.5)
-
-    if network_metrics["anomaly_flag"] == 1:
-        # High burst traffic signature
-        live_features = [98708819.0, 5000.0, 1500.0, 1460.0, 40.0, 1460.0, 40.0, 4500.0, 9500000.0]
-    else:
-        live_features = [
-            flow_duration,
-            max(2.0, float(len(lens))),
-            round(pps_rate * 0.4, 2),
-            float(max_len),
-            float(min_len),
-            float(max_len * 0.8),
-            float(min_len * 0.8),
-            round(pps_rate, 2),
-            round(pps_rate * 256.0, 2)
-        ]
-
-    # Run Random Forest classification
-    rf_classification = ai_engine.predict(live_features)
-
-    # 2. Sequential LSTM Latency Forecasting
-    historical_latencies.pop(0)
-    historical_latencies.append(current_latency)
-
-    forecasted_latency = ai_engine.predict_latency(historical_latencies)
-
-    # 3. Hybrid Explainability: RF security classification + raw performance thresholds
-    #    Produces two XAI fields: a plain-language 'diagnostic' and a 'recommended_fix'.
-    anomaly_state = 1 if rf_classification == 'Abnormal' else 0
-
-    if anomaly_state == 1:
-        system_state = 'CRITICAL'
-        diagnostic     = '[AI ALERT] Unusual traffic pattern detected! This looks like a network attack or strange behavior.'
-        recommended_fix = ('How to fix: Check your connected devices for unwanted users. '
-                           'Look at your firewall logs to see blocked connections, '
-                           'and disconnect the affected computers to be safe.')
-    elif current_bandwidth > 85.0:
-        system_state = 'DEGRADED'
-        diagnostic     = '[PERF ALERT] High data traffic is causing a network bottleneck.'
-        recommended_fix = ('How to fix: Find out which apps or users are downloading large files '
-                           'and limit their speed (traffic shaping). '
-                           'If this happens often, you may need to upgrade your internet speed.')
-    elif current_loss > 2.0:
-        system_state = 'DEGRADED'
-        diagnostic     = '[PERF ALERT] Too many data packets are getting lost (over 2%). This forces the network to keep resending data, making things slow.'
-        recommended_fix = ('How to fix: Check for damaged network cables or loose plugs. '
-                           'Make sure router and switch settings match perfectly on both ends '
-                           '(check duplex settings).')
-    else:
-        system_state = 'OPTIMAL'
-        diagnostic     = '[INFO] Network traffic is smooth and normal.'
-        recommended_fix = ''
-
-    return jsonify({
-        "status": "success",
-        "timestamp": int(time.time()),
-        "system_state": system_state,
-        "metrics": {
-            "latency": current_latency,
-            "latency_ms": current_latency,
-            "jitter": current_jitter,
-            "jitter_ms": current_jitter,
-            "packet_loss": current_loss,
-            "packet_loss_pct": current_loss,
-            "bandwidth": current_bandwidth,
-            "bandwidth_utilization_pct": current_bandwidth
-        },
-        "predictions": {
-            "classification": rf_classification,
-            "is_anomaly": (rf_classification == 'Abnormal'),
-            "forecasted_latency": forecasted_latency
-        },
-        "classification": rf_classification,
-        "forecasted_latency": forecasted_latency,
-        "diagnostic": diagnostic,
-        "recommended_fix": recommended_fix,
-        # Backward compatibility for earlier schema
-        "payload": {
+    global latest_completed_batch
+    
+    if latest_completed_batch is None:
+        # Provide a warm-up placeholder before the first interval completes
+        return jsonify({
+            "status": "warmup",
+            "timestamp": int(time.time()),
+            "system_state": "OPTIMAL",
             "metrics": {
-                "latency_ms": current_latency,
-                "jitter_ms": current_jitter,
-                "packet_loss_pct": current_loss,
-                "bandwidth_utilization_pct": current_bandwidth
+                "latency": None, "latency_ms": None,
+                "jitter": None, "jitter_ms": None,
+                "packet_loss": None, "packet_loss_pct": None,
+                "throughput_mbps": 0.0
             },
-            "analysis": {
-                "anomaly_state": anomaly_state,
-                "root_cause_explanation": diagnostic
+            "predictions": {
+                "classification": "Normal",
+                "is_anomaly": False,
+                "forecasted_latency": None
+            },
+            "classification": "Normal",
+            "forecasted_latency": None,
+            "diagnostic": "[INIT] Gathering telemetry window...",
+            "recommended_fix": "",
+            "payload": {
+                "metrics": {"latency_ms": None, "jitter_ms": None, "packet_loss_pct": None, "bandwidth_utilization_pct": 0.0},
+                "analysis": {"anomaly_state": 0, "root_cause_explanation": "Initializing"}
             }
-        }
-    })
+        })
+        
+    return jsonify(latest_completed_batch)
 
 
 if __name__ == '__main__':
