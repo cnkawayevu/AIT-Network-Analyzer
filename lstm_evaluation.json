@@ -1,0 +1,8 @@
+{
+    "observations": 1794,
+    "training_sequences": 1425,
+    "testing_sequences": 349,
+    "mae_ms": 6.804416656494141,
+    "rmse_ms": 8.932140530715424,
+    "trained_at": "2026-10-01T10:02:57.079274"
+}
