@@ -19,8 +19,9 @@ def collect():
     attempted = 0
     successful = 0
     failed = 0
+    numeric_successful = 0
     min_rtt = float('inf')
-    max_rtt = 0.0
+    max_rtt = -float('inf')
     sum_rtt = 0.0
 
     start_time = time.time()
@@ -38,21 +39,33 @@ def collect():
                 try:
                     startupinfo = subprocess.STARTUPINFO()
                     startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-                    output = subprocess.check_output(
+                    result = subprocess.run(
                         ["ping", "-n", "1", "1.1.1.1"],
                         startupinfo=startupinfo,
                         universal_newlines=True,
-                        timeout=2
+                        timeout=2,
+                        capture_output=True
                     )
                     
-                    if "time=" in output:
-                        time_str = output.split("time=")[1].split("ms")[0].strip()
-                        latency_ms = float(time_str)
+                    if result.returncode == 0:
                         success = 1
                         successful += 1
-                        min_rtt = min(min_rtt, latency_ms)
-                        max_rtt = max(max_rtt, latency_ms)
-                        sum_rtt += latency_ms
+                        latency_ms = ""
+                        if "time=" in result.stdout:
+                            try:
+                                time_str = result.stdout.split("time=")[1].split("ms")[0].strip()
+                                val = float(time_str)
+                                import math
+                                if math.isfinite(val):
+                                    latency_ms = val
+                                    numeric_successful += 1
+                                    min_rtt = min(min_rtt, val)
+                                    max_rtt = max(max_rtt, val)
+                                    sum_rtt += val
+                            except Exception:
+                                pass
+                        elif "time<1ms" in result.stdout:
+                            pass
                     else:
                         latency_ms = ""
                         success = 0
@@ -82,10 +95,14 @@ def collect():
     print(f"Probes attempted   : {attempted}")
     print(f"Successful probes  : {successful}")
     print(f"Failed probes      : {failed}")
-    if successful > 0:
-        print(f"Mean RTT           : {sum_rtt / successful:.2f} ms")
+    if numeric_successful > 0:
+        print(f"Mean RTT           : {sum_rtt / numeric_successful:.2f} ms")
         print(f"Min RTT            : {min_rtt:.2f} ms")
         print(f"Max RTT            : {max_rtt:.2f} ms")
+    else:
+        print("Mean RTT           : N/A")
+        print("Min RTT            : N/A")
+        print("Max RTT            : N/A")
 
 if __name__ == "__main__":
     collect()

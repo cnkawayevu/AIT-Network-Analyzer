@@ -21,17 +21,32 @@ app = Flask(__name__)
 ai_engine = NetworkAIEngine(rf_model_path="rf_model.joblib", time_steps=10)
 
 # Ensure pre-trained Random Forest model exists
-if not ai_engine.is_trained and os.path.exists("optimized_training_data.csv"):
-    print("[app.py] Pre-training RandomForest on optimized_training_data.csv...")
-    ai_engine.train_anomaly_detector("optimized_training_data.csv")
+if ai_engine.is_trained:
+    print("[app.py] VERIFICATION: Loaded saved RF model successfully.")
+else:
+    if os.environ.get("CAPSTONE_FROZEN_TEST") == "1":
+        print("[app.py] FATAL: RF model not loaded in FROZEN TEST mode.")
+        import sys
+        sys.exit(1)
+    if os.path.exists("optimized_training_data.csv"):
+        print("[app.py] VERIFICATION: RF model not found, invoking training fallback on optimized_training_data.csv...")
+        ai_engine.train_anomaly_detector("optimized_training_data.csv")
+    else:
+        print("[app.py] VERIFICATION: RF model not found and no dataset available.")
 
 # Ensure LSTM Forecaster exists or train it
-if not ai_engine.lstm_available:
+if ai_engine.lstm_available:
+    print("[app.py] VERIFICATION: Loaded saved LSTM model and scaler successfully.")
+else:
+    if os.environ.get("CAPSTONE_FROZEN_TEST") == "1":
+        print("[app.py] FATAL: LSTM model not loaded in FROZEN TEST mode.")
+        import sys
+        sys.exit(1)
     if os.path.exists("latency_baseline.csv"):
-        print("[app.py] Training LSTM forecaster on latency_baseline.csv...")
+        print("[app.py] VERIFICATION: LSTM model not found, invoking training fallback on latency_baseline.csv...")
         ai_engine.train_lstm_forecaster("latency_baseline.csv")
     else:
-        print("[app.py] WARNING: latency_baseline.csv not found. LSTM forecaster will remain unavailable.")
+        print("[app.py] VERIFICATION: LSTM model not found and no latency_baseline.csv available.")
 
 # Rolling queues for QoS metric generation
 historical_latencies = []
@@ -54,10 +69,11 @@ data_lock = threading.Lock()
 session_lock = threading.Lock()
 is_monitoring = False
 current_session_id = None
+session_generation = 0
 
 def evaluate_health(rf_classification, latency_ms, packet_loss_pct):
     alerts = []
-    
+
     if rf_classification == 'Abnormal':
         alerts.append({
             "alert_type": "AI_ANOMALY",
@@ -65,7 +81,7 @@ def evaluate_health(rf_classification, latency_ms, packet_loss_pct):
             "diagnostic": "[AI ALERT] Unusual traffic pattern detected! This looks like a network attack or strange behavior.",
             "recommended_fix": "How to fix: Check your connected devices for unwanted users. Look at your firewall logs to see blocked connections, and disconnect the affected computers to be safe."
         })
-        
+
     if latency_ms is not None and latency_ms > 80.0:
         alerts.append({
             "alert_type": "HIGH_LATENCY",
@@ -73,7 +89,7 @@ def evaluate_health(rf_classification, latency_ms, packet_loss_pct):
             "diagnostic": "[PERF ALERT] High latency is causing a network delay.",
             "recommended_fix": "How to fix: Find out which apps or users are downloading large files and limit their speed (traffic shaping)."
         })
-        
+
     if packet_loss_pct is not None and packet_loss_pct > 2.0:
         alerts.append({
             "alert_type": "PACKET_LOSS",
@@ -81,14 +97,14 @@ def evaluate_health(rf_classification, latency_ms, packet_loss_pct):
             "diagnostic": "[PERF ALERT] Too many data packets are getting lost (over 2%). This forces the network to keep resending data, making things slow.",
             "recommended_fix": "How to fix: Check for damaged network cables or loose plugs. Make sure router and switch settings match perfectly on both ends (check duplex settings)."
         })
-        
+
     if any(a["severity"] == "CRITICAL" for a in alerts):
         system_state = "CRITICAL"
     elif any(a["severity"] == "DEGRADED" for a in alerts):
         system_state = "DEGRADED"
     else:
         system_state = "OPTIMAL"
-        
+
     if any(a["alert_type"] == "AI_ANOMALY" for a in alerts):
         diagnostic = "[AI ALERT] Unusual traffic pattern detected! This looks like a network attack or strange behavior."
         recommended_fix = "How to fix: Check your connected devices for unwanted users. Look at your firewall logs to see blocked connections, and disconnect the affected computers to be safe."
@@ -101,7 +117,7 @@ def evaluate_health(rf_classification, latency_ms, packet_loss_pct):
     else:
         diagnostic = "[INFO] Network traffic is smooth and normal."
         recommended_fix = ""
-        
+
     return {
         "system_state": system_state,
         "diagnostic": diagnostic,
@@ -122,42 +138,56 @@ def live_packet_sniffer():
     """
     global packet_count, captured_bytes, fwd_lengths, bwd_lengths, first_packet_time, last_packet_time
 
-    def process_packet(packet):
-        global packet_count, captured_bytes, fwd_lengths, bwd_lengths, first_packet_time, last_packet_time, is_monitoring
-        if not is_monitoring:
-            return
-        if packet.haslayer(IP):
-            ip_src = packet[IP].src
-            ip_dst = packet[IP].dst
-            pkt_len = len(packet)
-            pkt_time = float(packet.time)
-            
-            if ip_src == ACTIVE_IP or ip_dst == ACTIVE_IP:
-                with data_lock:
-                    packet_count += 1
-                    captured_bytes += pkt_len
-                    
-                    if first_packet_time is None:
-                        first_packet_time = pkt_time
-                    last_packet_time = pkt_time
-
-                    if ip_src == ACTIVE_IP:
-                        fwd_lengths.append(pkt_len)
-                    elif ip_dst == ACTIVE_IP:
-                        bwd_lengths.append(pkt_len)
-
     iface_label = ACTIVE_IFACE if ACTIVE_IFACE else "ALL interfaces (fallback)"
     print(f"[sniffer] Starting packet capture on interface: {iface_label}")
 
     while True:
         try:
+            with session_lock:
+                if not is_monitoring:
+                    pass
+                else:
+                    capture_session_id = current_session_id
+                    capture_session_generation = session_generation
+
+            if not is_monitoring:
+                time.sleep(1)
+                continue
+
+            def make_callback(sid, sgen):
+                def packet_callback(packet):
+                    global packet_count, captured_bytes, fwd_lengths, bwd_lengths, first_packet_time, last_packet_time
+                    if packet.haslayer(IP):
+                        ip_src = packet[IP].src
+                        ip_dst = packet[IP].dst
+                        pkt_len = len(packet)
+                        pkt_time = float(packet.time)
+
+                        if ip_src == ACTIVE_IP or ip_dst == ACTIVE_IP:
+                            with session_lock:
+                                if not is_monitoring or current_session_id != sid or session_generation != sgen:
+                                    return
+                                with data_lock:
+                                    packet_count += 1
+                                    captured_bytes += pkt_len
+                                    if first_packet_time is None:
+                                        first_packet_time = pkt_time
+                                    last_packet_time = pkt_time
+                                    if ip_src == ACTIVE_IP:
+                                        fwd_lengths.append(pkt_len)
+                                    elif ip_dst == ACTIVE_IP:
+                                        bwd_lengths.append(pkt_len)
+                return packet_callback
+
             from scapy.config import conf
             sock = conf.L3socket if not getattr(conf, 'use_pcap', True) else None
             sniff(
                 iface=ACTIVE_IFACE,
                 L2socket=sock,
-                prn=process_packet,
-                store=0
+                prn=make_callback(capture_session_id, capture_session_generation),
+                store=0,
+                stop_filter=lambda p: not is_monitoring or current_session_id != capture_session_id or session_generation != capture_session_generation,
+                timeout=1.0  # Add timeout so it doesn't block forever if no packets arrive
             )
         except OSError as os_err:
             print(f"[sniffer] OSError on interface '{iface_label}': {os_err}")
@@ -175,41 +205,32 @@ def track_performance_metrics():
 
     while True:
         time.sleep(2)
-        if not is_monitoring:
+
+        with session_lock:
+            if not is_monitoring or current_session_id is None:
+                continue
+
+            iteration_session_id = current_session_id
+            iteration_session_generation = session_generation
+
             with data_lock:
-                packet_count = 0
+                current_time = time.time()
+                elapsed = current_time - last_check_time
+
+                snap_bytes = captured_bytes
                 captured_bytes = 0
+                packet_count = 0
+
+                snap_fwd = list(fwd_lengths)
+                snap_bwd = list(bwd_lengths)
+                snap_first_time = first_packet_time
+                snap_last_time = last_packet_time
+
                 fwd_lengths = []
                 bwd_lengths = []
                 first_packet_time = None
                 last_packet_time = None
-                historical_latencies = []
-                historical_ping_results = []
-                historical_valid_rtts = []
-                last_check_time = time.time()
-                latest_completed_batch = None
-                batch_counter = 0
-            continue
-
-        current_time = time.time()
-        elapsed = current_time - last_check_time
-
-        with data_lock:
-            snap_bytes = captured_bytes
-            
-            captured_bytes = 0
-            packet_count = 0
-            
-            snap_fwd = list(fwd_lengths)
-            snap_bwd = list(bwd_lengths)
-            snap_first_time = first_packet_time
-            snap_last_time = last_packet_time
-
-            fwd_lengths = []
-            bwd_lengths = []
-            first_packet_time = None
-            last_packet_time = None
-            last_check_time = current_time
+                last_check_time = current_time
 
         # 1. Throughput calculation
         throughput_bps = (snap_bytes * 8) / elapsed if elapsed > 0 else 0.0
@@ -217,38 +238,32 @@ def track_performance_metrics():
 
         # 2. Query True System Latency via ICMP Ping
         latency_val = None
+        ping_success = False
         try:
             startupinfo = subprocess.STARTUPINFO()
             startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-            output = subprocess.check_output(
+            result = subprocess.run(
                 ["ping", "-n", "1", "1.1.1.1"],
                 startupinfo=startupinfo,
                 universal_newlines=True,
-                timeout=2
+                timeout=2,
+                capture_output=True
             )
-            if "time=" in output:
-                time_str = output.split("time=")[1].split("ms")[0].strip()
-                latency_val = float(time_str)
+            if result.returncode == 0:
+                ping_success = True
+                if "time=" in result.stdout:
+                    try:
+                        time_str = result.stdout.split("time=")[1].split("ms")[0].strip()
+                        val = float(time_str)
+                        import math
+                        if math.isfinite(val):
+                            latency_val = val
+                    except Exception:
+                        pass
+                elif "time<1ms" in result.stdout:
+                    pass
         except Exception:
             pass
-
-        if latency_val is not None:
-            if len(historical_ping_results) >= 10: historical_ping_results.pop(0)
-            historical_ping_results.append(0)
-            if len(historical_valid_rtts) >= 10: historical_valid_rtts.pop(0)
-            historical_valid_rtts.append(latency_val)
-        else:
-            if len(historical_ping_results) >= 10: historical_ping_results.pop(0)
-            historical_ping_results.append(1)
-
-        packet_loss_pct = None
-        if len(historical_ping_results) > 0:
-            packet_loss_pct = round((sum(historical_ping_results) / len(historical_ping_results)) * 100.0, 2)
-
-        jitter_val = None
-        if len(historical_valid_rtts) >= 2:
-            diffs = [abs(historical_valid_rtts[i] - historical_valid_rtts[i-1]) for i in range(1, len(historical_valid_rtts))]
-            jitter_val = round(sum(diffs) / len(diffs), 2)
 
         # 3. RF Feature Extraction (OUTSIDE the lock)
         if snap_first_time is not None and snap_last_time is not None:
@@ -284,58 +299,89 @@ def track_performance_metrics():
             flow_bytes_per_sec
         ]
 
-        # 4. ML Inference
+        # 4. ML Inference (Part 1 - RF is independent of history)
         rf_classification = ai_engine.predict(live_features)
+        rf_interpretation = ai_engine.get_rf_interpretation(live_features)
 
-        if latency_val is not None:
-            if len(historical_latencies) >= 10:
-                historical_latencies.pop(0)
-            historical_latencies.append(latency_val)
+        with session_lock:
+            if not is_monitoring or current_session_id != iteration_session_id or session_generation != iteration_session_generation:
+                continue
 
-        forecasted_latency = ai_engine.predict_latency(historical_latencies)
+            if ping_success:
+                historical_ping_results.append(0)
+                if latency_val is not None:
+                    historical_valid_rtts.append(latency_val)
+            else:
+                historical_ping_results.append(1)
 
-        # 5. Health evaluation: RF classification + performance threshold rules
+            if len(historical_ping_results) > 10:
+                del historical_ping_results[:-10]
+            if len(historical_valid_rtts) > 10:
+                del historical_valid_rtts[:-10]
+
+            if latency_val is not None:
+                historical_latencies.append(latency_val)
+            if len(historical_latencies) > 10:
+                del historical_latencies[:-10]
+
+            packet_loss_pct = None
+            if len(historical_ping_results) > 0:
+                packet_loss_pct = round((sum(historical_ping_results) / len(historical_ping_results)) * 100.0, 2)
+
+            jitter_val = None
+            if len(historical_valid_rtts) >= 2:
+                diffs = [abs(historical_valid_rtts[i] - historical_valid_rtts[i-1]) for i in range(1, len(historical_valid_rtts))]
+                jitter_val = round(sum(diffs) / len(diffs), 2)
+
+            hist_latencies_copy = list(historical_latencies)
+
+        # ML Inference (Part 2 - LSTM needs history copy)
+        forecasted_latency = ai_engine.predict_latency(hist_latencies_copy)
+
+        # 5. Health evaluation
         health_status = evaluate_health(rf_classification, latency_val, packet_loss_pct)
         system_state = health_status["system_state"]
         diagnostic = health_status["diagnostic"]
         recommended_fix = health_status["recommended_fix"]
         active_alerts = health_status["alerts"]
 
-        batch_counter += 1
-        # 6. Interpretability (Feature-aware)
-        rf_interpretation = ai_engine.get_rf_interpretation(live_features)
-
-        latest_completed_batch = {
-            "batch_id": batch_counter,
-            "status": "success",
-            "timestamp": int(time.time()),
-            "system_state": system_state,
-            "metrics": {
-                "latency": latency_val,
-                "latency_ms": latency_val,
-                "jitter": jitter_val,
-                "jitter_ms": jitter_val,
-                "packet_loss": packet_loss_pct,
-                "packet_loss_pct": packet_loss_pct,
-                "throughput_mbps": throughput_mbps,
-            },
-            "predictions": {
-                "classification": rf_classification,
-                "is_anomaly": (rf_classification == 'Abnormal'),
-                "forecasted_latency": forecasted_latency
-            },
-            "classification": rf_classification,
-            "forecasted_latency": forecasted_latency,
-            "diagnostic": diagnostic,
-            "recommended_fix": recommended_fix,
-            "interpretability": rf_interpretation
-        }
-
         with session_lock:
-            if is_monitoring and current_session_id is not None:
+            if not is_monitoring or current_session_id != iteration_session_id or session_generation != iteration_session_generation:
+                continue
+
+            batch_counter += 1
+            latest_completed_batch = {
+                "batch_id": batch_counter,
+                "session_id": iteration_session_id,
+                "session_generation": iteration_session_generation,
+                "status": "success",
+                "timestamp": int(time.time()),
+                "system_state": system_state,
+                "metrics": {
+                    "latency": latency_val,
+                    "latency_ms": latency_val,
+                    "jitter": jitter_val,
+                    "jitter_ms": jitter_val,
+                    "packet_loss": packet_loss_pct,
+                    "packet_loss_pct": packet_loss_pct,
+                    "throughput_mbps": throughput_mbps,
+                },
+                "predictions": {
+                    "classification": rf_classification,
+                    "is_anomaly": (rf_classification == 'Abnormal'),
+                    "forecasted_latency": forecasted_latency
+                },
+                "classification": rf_classification,
+                "forecasted_latency": forecasted_latency,
+                "diagnostic": diagnostic,
+                "recommended_fix": recommended_fix,
+                "interpretability": rf_interpretation
+            }
+
+            if current_session_id is not None:
                 sid = current_session_id
                 ts = datetime.utcnow().isoformat()
-                
+
                 db.db_queue.put(('telemetry', (
                     sid,
                     batch_counter,
@@ -354,15 +400,14 @@ def track_performance_metrics():
 
                 for alert in active_alerts:
                     db.db_queue.put(('alerts', (
-                        sid, 
-                        batch_counter, 
-                        ts, 
-                        alert["alert_type"], 
-                        alert["severity"], 
-                        alert["diagnostic"], 
+                        sid,
+                        batch_counter,
+                        ts,
+                        alert["alert_type"],
+                        alert["severity"],
+                        alert["diagnostic"],
                         alert["recommended_fix"]
                     )))
-
 
 # Spin up concurrent hardware background execution threads
 threading.Thread(target=live_packet_sniffer, daemon=True).start()
@@ -378,36 +423,64 @@ def console():
 @app.route('/api/control', methods=['POST'])
 def control():
     """Toggles background network monitoring."""
-    global is_monitoring, current_session_id
-    data = request.get_json()
-    if data and "action" in data:
-        if data["action"] == "start":
-            with session_lock:
-                if is_monitoring:
-                    return jsonify({"status": "success", "is_monitoring": True, "session_id": current_session_id})
-                try:
-                    new_id = db.start_session()
-                    current_session_id = new_id
-                    is_monitoring = True
-                    return jsonify({"status": "success", "is_monitoring": True, "session_id": current_session_id})
-                except Exception as e:
-                    return jsonify({"status": "error", "message": "Failed to start DB session"}), 500
+    global is_monitoring, current_session_id, session_generation
 
-        elif data["action"] == "stop":
-            with session_lock:
-                if not is_monitoring or current_session_id is None:
-                    return jsonify({"status": "success", "is_monitoring": False})
-                
-                sid = current_session_id
+    try:
+        data = request.get_json(silent=True)
+    except Exception:
+        data = None
+
+    if not isinstance(data, dict):
+        return jsonify({"status": "error", "message": "Invalid JSON or payload"}), 400
+
+    if "action" not in data or data["action"] not in ["start", "stop"]:
+        return jsonify({"status": "error", "message": "Invalid action"}), 400
+
+    if data["action"] == "start":
+        with session_lock:
+            if is_monitoring:
+                return jsonify({"status": "success", "is_monitoring": True, "session_id": current_session_id, "session_generation": session_generation})
+            try:
+                new_id = db.start_session()
+                current_session_id = new_id
+                is_monitoring = True
+                session_generation += 1
+
+                # Reset session-scoped runtime data on new session
+                with data_lock:
+                    global packet_count, captured_bytes, fwd_lengths, bwd_lengths, first_packet_time, last_packet_time
+                    global historical_latencies, historical_ping_results, historical_valid_rtts, last_check_time, latest_completed_batch, batch_counter
+                    packet_count = 0
+                    captured_bytes = 0
+                    fwd_lengths = []
+                    bwd_lengths = []
+                    first_packet_time = None
+                    last_packet_time = None
+                    historical_latencies = []
+                    historical_ping_results = []
+                    historical_valid_rtts = []
+                    last_check_time = time.time()
+                    latest_completed_batch = None
+                    batch_counter = 0
+
+                return jsonify({"status": "success", "is_monitoring": True, "session_id": current_session_id, "session_generation": session_generation})
+            except Exception as e:
+                return jsonify({"status": "error", "message": "Failed to start DB session"}), 500
+
+    elif data["action"] == "stop":
+        with session_lock:
+            if not is_monitoring or current_session_id is None:
+                return jsonify({"status": "success", "is_monitoring": False})
+
+            sid = current_session_id
+            try:
+                db.stop_session(sid)
                 is_monitoring = False
-                
-                try:
-                    db.stop_session(sid)
-                    current_session_id = None
-                    return jsonify({"status": "success", "is_monitoring": False, "session_id": sid})
-                except Exception as e:
-                    print(f"[app.py] Error finalizing session: {e}")
-                    return jsonify({"status": "error", "message": "Failed to finalize DB session"}), 500
+                current_session_id = None
+                return jsonify({"status": "success", "is_monitoring": False, "session_id": sid})
+            except Exception as e:
+                print(f"[app.py] Error finalizing session: {e}")
+                return jsonify({"status": "error", "message": "Failed to finalize DB session"}), 500
 
     return jsonify({"status": "error", "message": "Invalid payload"}), 400
 
@@ -415,37 +488,37 @@ def control():
 @app.route('/api/telemetry')
 @app.route('/api/telemetry/stream')
 def get_telemetry():
-    """Combined JSON API route serving live metrics and AI model predictions.
-
-    Reads the latest completed micro-batch to ensure coherent single-inference reporting.
-    """
-    global latest_completed_batch
-    
-    if latest_completed_batch is None:
-        # Provide a warm-up placeholder before the first interval completes
-        return jsonify({
-            "status": "warmup",
-            "timestamp": int(time.time()),
-            "system_state": "OPTIMAL",
-            "metrics": {
-                "latency": None, "latency_ms": None,
-                "jitter": None, "jitter_ms": None,
-                "packet_loss": None, "packet_loss_pct": None,
-                "throughput_mbps": 0.0
-            },
-            "predictions": {
+    """Combined JSON API route serving live metrics and AI model predictions."""
+    with session_lock:
+        if latest_completed_batch is None:
+            return jsonify({
+                "status": "warmup",
+                "is_monitoring": is_monitoring,
+                "session_id": current_session_id,
+                "session_generation": session_generation,
+                "timestamp": int(time.time()),
+                "system_state": "OPTIMAL",
+                "metrics": {
+                    "latency": None, "latency_ms": None,
+                    "jitter": None, "jitter_ms": None,
+                    "packet_loss": None, "packet_loss_pct": None,
+                    "throughput_mbps": 0.0
+                },
+                "predictions": {
+                    "classification": "Normal",
+                    "is_anomaly": False,
+                    "forecasted_latency": None
+                },
                 "classification": "Normal",
-                "is_anomaly": False,
-                "forecasted_latency": None
-            },
-            "classification": "Normal",
-            "forecasted_latency": None,
-            "diagnostic": "[INIT] Gathering telemetry window...",
-            "recommended_fix": "",
-            "interpretability": None
-        })
-        
-    return jsonify(latest_completed_batch)
+                "forecasted_latency": None,
+                "diagnostic": "[INIT] Gathering telemetry window...",
+                "recommended_fix": "",
+                "interpretability": None
+            })
+
+        out = dict(latest_completed_batch)
+        out["is_monitoring"] = is_monitoring
+    return jsonify(out)
 
 
 @app.route('/api/sessions')

@@ -418,7 +418,30 @@ class NetworkAIEngine:
         if not self.lstm_available or self.lstm_model is None or self.scaler is None:
             return None
 
-        arr = np.asarray(historical_latencies, dtype=np.float32).flatten()
+        if historical_latencies is None:
+            return None
+
+        try:
+            valid_vals = []
+            # iterate properly to avoid truth value ambiguous error
+            # handle both lists and numpy arrays
+            if hasattr(historical_latencies, '__iter__'):
+                for v in historical_latencies:
+                    try:
+                        val = float(v)
+                        import math
+                        if math.isfinite(val):
+                            valid_vals.append(val)
+                    except Exception:
+                        pass
+
+            if not valid_vals:
+                return None
+
+            arr = np.array(valid_vals, dtype=np.float32)
+        except Exception:
+            return None
+
         steps = self.time_steps
 
         # Adjust window size to match expected LSTM input time steps

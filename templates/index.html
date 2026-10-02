@@ -494,6 +494,9 @@
         let latencyArray = [];
         let alertCounts = { latency_delay: 0, packet_loss: 0, anomaly: 0 };
         let sessionAlertsHistory = [];
+        let activeSessionId = null;
+        let activeSessionGeneration = null;
+        let processedBatchIds = new Set();
 
         function resetSessionState() {
             sessionStartTime = null;
@@ -501,6 +504,7 @@
             latencyArray = [];
             alertCounts = { latency_delay: 0, packet_loss: 0, anomaly: 0 };
             sessionAlertsHistory = [];
+            processedBatchIds.clear();
         }
 
 
@@ -509,50 +513,107 @@
         // ═══════════════════════════════════════════════════════════════════════════
 
         let monitorInterval = null;
-        let isMonitoring = false; fetch('/api/control', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({action: 'stop'})});
+        let isMonitoring = false;
         let pieChartRef = null;
+
+        // Initialize state from backend on load
+        fetch('/api/telemetry')
+            .then(r => r.json())
+            .then(data => {
+                if (data.is_monitoring === true) {
+                    isMonitoring = true;
+                    activeSessionId = data.session_id;
+                    activeSessionGeneration = data.session_generation;
+                    resetSessionState(); // Clear local stats properly
+
+                    document.getElementById('monitor-btn').textContent = 'Stop Monitoring Session';
+                    document.getElementById('monitor-btn').className = document.getElementById('monitor-btn').className
+                        .replace('bg-sky-600', 'bg-rose-600')
+                        .replace('hover:bg-sky-500', 'hover:bg-rose-500')
+                        .replace('shadow-[0_0_15px_rgba(2,132,199,0.3)]', 'shadow-[0_0_15px_rgba(225,29,72,0.3)]')
+                        .replace('border-sky-400/20', 'border-rose-400/20');
+                    monitorInterval = setInterval(streamTelemetry, 2000);
+                }
+            })
+            .catch(e => console.error(e));
 
         function toggleMonitoring() {
             const btn = document.getElementById('monitor-btn');
+            btn.disabled = true; // disable until response
 
             if (!isMonitoring) {
                 // ── START ─────────────────────────────────────────────────────────
-                isMonitoring = true; fetch('/api/control', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({action: 'start'})});
-                resetSessionState();
-                sessionStartTime = Date.now();
+                fetch('/api/control', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({action: 'start'})
+                })
+                .then(r => { if (!r.ok) throw new Error("Backend start failed"); return r.json(); })
+                .then(res => {
+                    btn.disabled = false;
+                    if (res.status === 'success' && res.is_monitoring === true && res.session_id !== null && res.session_id !== undefined) {
+                        isMonitoring = true;
+                        activeSessionId = res.session_id;
+                        activeSessionGeneration = res.session_generation !== undefined ? res.session_generation : null;
+                        resetSessionState();
+                        sessionStartTime = Date.now();
 
-                btn.textContent = 'Stop Monitoring Session';
-                btn.className = btn.className
-                    .replace('bg-sky-600', 'bg-rose-600')
-                    .replace('hover:bg-sky-500', 'hover:bg-rose-500')
-                    .replace('shadow-[0_0_15px_rgba(2,132,199,0.3)]', 'shadow-[0_0_15px_rgba(225,29,72,0.3)]')
-                    .replace('border-sky-400/20', 'border-rose-400/20');
+                        btn.textContent = 'Stop Monitoring Session';
+                        btn.className = btn.className
+                            .replace('bg-sky-600', 'bg-rose-600')
+                            .replace('hover:bg-sky-500', 'hover:bg-rose-500')
+                            .replace('shadow-[0_0_15px_rgba(2,132,199,0.3)]', 'shadow-[0_0_15px_rgba(225,29,72,0.3)]')
+                            .replace('border-sky-400/20', 'border-rose-400/20');
 
-                appendLog('text-slate-500', 'text-slate-600', '[SESSION] Monitoring session started.', '');
+                        appendLog('text-slate-500', 'text-slate-600', '[SESSION] Monitoring session started.', '');
 
-                switchTab('live-stream');
-                streamTelemetry();
-                monitorInterval = setInterval(streamTelemetry, 2000);
+                        switchTab('live-stream');
+                        streamTelemetry();
+                        if (monitorInterval) clearInterval(monitorInterval);
+                        monitorInterval = setInterval(streamTelemetry, 2000);
+                    }
+                })
+                .catch(err => {
+                    btn.disabled = false;
+                    console.error("Start failed:", err);
+                    appendLog('text-rose-500', 'text-rose-600', '[ERROR] Failed to start monitoring session.', '');
+                });
 
             } else {
                 // ── STOP ──────────────────────────────────────────────────────────
-                isMonitoring = false; fetch('/api/control', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({action: 'stop'})});
-                clearInterval(monitorInterval);
-                monitorInterval = null;
+                fetch('/api/control', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({action: 'stop'})
+                })
+                .then(r => { if (!r.ok) throw new Error("Backend stop failed"); return r.json(); })
+                .then(res => {
+                    btn.disabled = false;
+                    if (res.status === 'success' && res.is_monitoring === false) {
+                        isMonitoring = false;
+                        if (monitorInterval) clearInterval(monitorInterval);
+                        monitorInterval = null;
 
-                btn.textContent = 'Start Monitoring Session';
-                btn.className = btn.className
-                    .replace('bg-rose-600', 'bg-sky-600')
-                    .replace('hover:bg-rose-500', 'hover:bg-sky-500')
-                    .replace('shadow-[0_0_15px_rgba(225,29,72,0.3)]', 'shadow-[0_0_15px_rgba(2,132,199,0.3)]')
-                    .replace('border-rose-400/20', 'border-sky-400/20');
+                        btn.textContent = 'Start Monitoring Session';
+                        btn.className = btn.className
+                            .replace('bg-rose-600', 'bg-sky-600')
+                            .replace('hover:bg-rose-500', 'hover:bg-sky-500')
+                            .replace('shadow-[0_0_15px_rgba(225,29,72,0.3)]', 'shadow-[0_0_15px_rgba(2,132,199,0.3)]')
+                            .replace('border-rose-400/20', 'border-sky-400/20');
 
-                appendLog('text-slate-500', 'text-slate-600', '[SESSION] Monitoring session paused.', '');
+                        appendLog('text-slate-500', 'text-slate-600', '[SESSION] Monitoring session paused.', '');
 
-                // Route user straight to analytics (Step 4.2)
-                buildAnalyticsTab();
-                buildAlertCenter();
-                switchTab('analytics');
+                        // Route user straight to analytics (Step 4.2)
+                        buildAnalyticsTab();
+                        buildAlertCenter();
+                        switchTab('analytics');
+                    }
+                })
+                .catch(err => {
+                    btn.disabled = false;
+                    console.error("Stop failed:", err);
+                    appendLog('text-rose-500', 'text-rose-600', '[ERROR] Failed to stop monitoring session.', '');
+                });
             }
         }
 
@@ -713,6 +774,11 @@
             fetch('/api/telemetry/stream')
                 .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
                 .then(data => {
+                    if (!isMonitoring || data.status === "warmup") return;
+                    if (data.session_id !== activeSessionId) return;
+                    if (activeSessionGeneration !== null && data.session_generation !== activeSessionGeneration) return;
+                    if (activeSessionGeneration === null && data.session_generation !== undefined) activeSessionGeneration = data.session_generation;
+
                     const metrics = data.metrics || {};
                     const predictions = data.predictions || {};
 
@@ -734,23 +800,28 @@
                     const recommendedFix = data.recommended_fix || '';
 
                     const timeLabel = nowLabel();
+                    const batchId = data.batch_id;
+                    const isNewBatch = (batchId !== undefined && !processedBatchIds.has(batchId));
 
-                    // ── Track session data ───────────────────────────────────────────
-                    if (latency !== null) latencyArray.push(latency);
+                    if (isNewBatch) {
+                        processedBatchIds.add(batchId);
+                        // ── Track session data ───────────────────────────────────────────
+                        if (latency !== null) latencyArray.push(latency);
 
-                    if (systemState === 'CRITICAL') {
-                        totalAlerts++;
-                        alertCounts.anomaly++;
-                        sessionAlertsHistory.push({ timestamp: timeLabel, state: systemState, diagnostic, fix: recommendedFix });
-                    } else if (systemState === 'DEGRADED') {
-                        totalAlerts++;
-                        if (diagnostic.toLowerCase().includes('latency') ||
-                            diagnostic.toLowerCase().includes('delay')) {
-                            alertCounts.latency_delay++;
-                        } else {
-                            alertCounts.packet_loss++;
+                        if (systemState === 'CRITICAL') {
+                            totalAlerts++;
+                            alertCounts.anomaly++;
+                            sessionAlertsHistory.push({ timestamp: timeLabel, state: systemState, diagnostic, fix: recommendedFix });
+                        } else if (systemState === 'DEGRADED') {
+                            totalAlerts++;
+                            if (diagnostic.toLowerCase().includes('latency') ||
+                                diagnostic.toLowerCase().includes('delay')) {
+                                alertCounts.latency_delay++;
+                            } else {
+                                alertCounts.packet_loss++;
+                            }
+                            sessionAlertsHistory.push({ timestamp: timeLabel, state: systemState, diagnostic, fix: recommendedFix });
                         }
-                        sessionAlertsHistory.push({ timestamp: timeLabel, state: systemState, diagnostic, fix: recommendedFix });
                     }
 
                     // ── Metric cards (Step 1.2: Override to rose-500 if breached) ───
@@ -801,49 +872,51 @@
                     setMetric('m-bandwidth', bandwidth.toFixed(1), 'Mbps', false);
 
                     // ── Chart.js line data push ──────────────────────────────────────
-                    if (chartData.labels.length >= MAX_POINTS) {
-                        chartData.labels.shift();
-                        chartData.datasets.forEach(ds => ds.data.shift());
-                    }
-                    chartData.labels.push(timeLabel);
-                    chartData.datasets[0].data.push(latency);
-                    chartData.datasets[1].data.push(forecast);
-                    chartData.datasets[2].data.push(bandwidth);
-                    consoleChart.update();
+                    if (isNewBatch) {
+                        if (chartData.labels.length >= MAX_POINTS) {
+                            chartData.labels.shift();
+                            chartData.datasets.forEach(ds => ds.data.shift());
+                        }
+                        chartData.labels.push(timeLabel);
+                        chartData.datasets[0].data.push(latency);
+                        chartData.datasets[1].data.push(forecast);
+                        chartData.datasets[2].data.push(bandwidth);
+                        consoleChart.update();
 
-                    // ── XAI console row ──────────────────────────────────────────────
-                    let rowColor, tsColor;
-                    if (systemState === 'CRITICAL') { rowColor = 'text-rose-500'; tsColor = 'text-rose-700'; }
-                    else if (systemState === 'DEGRADED') { rowColor = 'text-amber-500'; tsColor = 'text-amber-700'; }
-                    else { rowColor = 'text-emerald-400'; tsColor = 'text-slate-700'; }
-                    appendLog(rowColor, tsColor, diagnostic, recommendedFix);
+                        // ── XAI console row ──────────────────────────────────────────────
+                        let rowColor, tsColor;
+                        if (systemState === 'CRITICAL') { rowColor = 'text-rose-500'; tsColor = 'text-rose-700'; }
+                        else if (systemState === 'DEGRADED') { rowColor = 'text-amber-500'; tsColor = 'text-amber-700'; }
+                        else { rowColor = 'text-emerald-400'; tsColor = 'text-slate-700'; }
+                        appendLog(rowColor, tsColor, diagnostic, recommendedFix);
 
-                    // ── RF Interpretation ──────────────────────────────────────────────
-                    const interpContainer = document.getElementById('rf-interpretation-content');
-                    if (interpContainer) {
-                        const interp = data.interpretability;
-                        if (!interp || !interp.top_features) {
-                            interpContainer.innerHTML = '<span class="text-slate-500">Interpretation unavailable.</span>';
-                        } else {
-                            let classificationHtml = `<div class="mb-2"><span class="text-slate-500 uppercase tracking-widest text-[10px]">Classification:</span> <strong class="${data.classification === 'Abnormal' ? 'text-rose-400' : 'text-emerald-400'}">${data.classification}</strong>`;
-                            if (interp.classification_confidence !== undefined) {
-                                classificationHtml += ` <span class="text-slate-500 ml-2 text-[10px]">(Model probability: ${(interp.classification_confidence * 100).toFixed(1)}%)</span>`;
-                            }
-                            classificationHtml += `</div>`;
+                        // ── RF Interpretation ──────────────────────────────────────────────
+                        const interpContainer = document.getElementById('rf-interpretation-content');
+                        if (interpContainer) {
+                            const interp = data.interpretability;
+                            if (!interp || !interp.top_features) {
+                                interpContainer.innerHTML = '<span class="text-slate-500">Interpretation unavailable.</span>';
+                            } else {
+                                let classificationHtml = `<div class="mb-2"><span class="text-slate-500 uppercase tracking-widest text-[10px]">Classification:</span> <strong class="${data.classification === 'Abnormal' ? 'text-rose-400' : 'text-emerald-400'}">${data.classification}</strong>`;
+                                if (interp.classification_confidence !== undefined) {
+                                    classificationHtml += ` <span class="text-slate-500 ml-2 text-[10px]">(Model probability: ${(interp.classification_confidence * 100).toFixed(1)}%)</span>`;
+                                }
+                                classificationHtml += `</div>`;
 
-                            let featuresHtml = `<div class="mt-2 mb-2"><span class="text-slate-500 uppercase tracking-widest text-[10px]">Top Global Features:</span></div>`;
-                            interp.top_features.forEach(f => {
-                                featuresHtml += `<div class="mb-2 pl-2 border-l-2 border-slate-700">
-                                    <div class="text-slate-300 font-bold">${f.feature_name}</div>
-                                    <div class="text-[10px] text-slate-500">Current: <span class="text-cyan-400">${f.current_value}</span> | Global importance: ${f.importance_percent.toFixed(1)}%</div>
+                                let featuresHtml = `<div class="mt-2 mb-2"><span class="text-slate-500 uppercase tracking-widest text-[10px]">Top Global Features:</span></div>`;
+                                interp.top_features.forEach(f => {
+                                    featuresHtml += `<div class="mb-2 pl-2 border-l-2 border-slate-700">
+                                        <div class="text-slate-300 font-bold">${f.feature_name}</div>
+                                        <div class="text-[10px] text-slate-500">Current: <span class="text-cyan-400">${f.current_value}</span> | Global importance: ${f.importance_percent.toFixed(1)}%</div>
+                                    </div>`;
+                                });
+
+                                const noteHtml = `<div class="mt-3 pt-2 border-t border-slate-800 text-[9px] text-slate-600 leading-tight">
+                                    Feature importance describes the Random Forest model globally. Current values are shown for context and are not causal explanations of an individual prediction.
                                 </div>`;
-                            });
 
-                            const noteHtml = `<div class="mt-3 pt-2 border-t border-slate-800 text-[9px] text-slate-600 leading-tight">
-                                Feature importance describes the Random Forest model globally. Current values are shown for context and are not causal explanations of an individual prediction.
-                            </div>`;
-
-                            interpContainer.innerHTML = classificationHtml + featuresHtml + noteHtml;
+                                interpContainer.innerHTML = classificationHtml + featuresHtml + noteHtml;
+                            }
                         }
                     }
 
