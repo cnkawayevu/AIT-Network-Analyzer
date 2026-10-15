@@ -75,6 +75,21 @@
         .metric-val {
             transition: color 0.3s ease;
         }
+
+        .network-health {
+            flex: 1 1 20rem;
+            min-width: 0;
+            padding: 0.65rem 0.85rem;
+            border: 1px solid #475569;
+            border-left-width: 4px;
+            border-radius: 0.375rem;
+            background: #0f172a;
+            color: #cbd5e1;
+        }
+        .network-health[data-state="OPTIMAL"] { border-color: #34d399; color: #6ee7b7; }
+        .network-health[data-state="DEGRADED"] { border-color: #fbbf24; color: #fcd34d; }
+        .network-health[data-state="CRITICAL"] { border-color: #fb7185; color: #fda4af; }
+        #health-explanation { overflow-wrap: anywhere; }
     </style>
 </head>
 
@@ -82,7 +97,7 @@
 
     <!-- ═══════════════════════ TOP HEADER ═══════════════════════ -->
     <header
-        class="flex items-center justify-between border-b border-slate-800 bg-slate-900/80 backdrop-blur-sm px-6 py-4 shrink-0 shadow-sm z-20 relative">
+        class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 bg-slate-900/80 backdrop-blur-sm px-6 py-4 shrink-0 shadow-sm z-20 relative">
         <div class="flex items-center gap-4">
             <div>
                 <h1 class="text-lg font-bold tracking-tight text-slate-100 uppercase">
@@ -94,13 +109,18 @@
             </div>
         </div>
 
-        <div class="flex items-center gap-5">
-            <!-- Live badge -->
-            <span
-                class="inline-flex items-center gap-2 rounded border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-emerald-400">
-                <span
-                    class="pulse-dot h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]"></span>
-                LIVE SCAPY STREAM
+        <div id="network-health" class="network-health" data-state="UNAVAILABLE" role="status" aria-live="polite" aria-atomic="true">
+            <p class="text-xs font-bold uppercase tracking-wider">Network Health:
+                <span id="health-state">Checking availability</span>
+            </p>
+            <p id="health-explanation" class="mt-1 text-xs leading-relaxed text-slate-300">Waiting for monitoring status.</p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-3">
+            <!-- HTTP telemetry availability; this does not assert capture health. -->
+            <span id="stream-status"
+                class="inline-flex items-center rounded border border-slate-600 bg-slate-800 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-slate-300">
+                TELEMETRY: CHECKING
             </span>
 
             <span class="text-[10px] text-slate-500 font-mono font-bold tracking-widest">
@@ -135,19 +155,20 @@
     </nav>
 
     <!-- ═══════════════════════ TAB CONTENT AREA ═══════════════════════ -->
-    <main class="flex-1 flex flex-col overflow-hidden px-6 py-6 gap-6 relative z-0">
+    <main class="flex-1 min-h-0 flex flex-col overflow-y-auto px-6 py-6 gap-6 relative z-0">
 
         <!-- ─────────────── TAB: LIVE STREAM (Step 1) ─────────────── -->
         <div id="tab-live-stream" class="flex flex-col gap-6 flex-1">
 
             <!-- Metrics Cards Grid (Step 1.2) -->
-            <section class="grid grid-cols-5 gap-4 shrink-0">
+            <section aria-label="Metric readings" aria-describedby="metrics-status" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-4 shrink-0">
+                <p id="metrics-status" class="col-span-full text-[11px] font-semibold uppercase tracking-wider text-slate-400" role="status" aria-atomic="true">METRICS: AWAITING TELEMETRY</p>
                 <div
                     class="bg-slate-900 border border-slate-800 rounded p-4 hover:border-slate-700 transition-colors shadow-sm relative overflow-hidden group">
                     <div
                         class="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-cyan-500/20 to-transparent group-hover:via-cyan-500/50 transition-all">
                     </div>
-                    <p class="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1">Live Latency</p>
+                    <p class="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1">Latency</p>
                     <p id="m-latency" class="metric-val text-3xl font-bold font-mono text-cyan-400 tabular-nums">-- ms
                     </p>
                     <p class="mt-2 text-[10px] text-slate-500 uppercase tracking-wider font-semibold">ICMP RTT TO 1.1.1.1</p>
@@ -198,10 +219,10 @@
             </section>
 
             <!-- Locked Height Layout: Chart + Diagnostics (Step 1.3 & 1.4) -->
-            <section class="grid grid-cols-3 gap-6 flex-1 min-h-0">
+            <section class="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1">
                 <!-- Left: Live chart (2/3) -->
                 <div
-                    class="col-span-2 bg-slate-900 border border-slate-800 rounded p-5 flex flex-col h-[calc(100vh-22rem)] min-h-[400px] shadow-sm">
+                    class="lg:col-span-2 min-w-0 bg-slate-900 border border-slate-800 rounded p-5 flex flex-col h-[calc(100vh-22rem)] min-h-[400px] shadow-sm">
                     <div class="flex items-center justify-between mb-4 shrink-0">
                         <div>
                             <h2 class="text-xs font-bold text-slate-200 tracking-widest uppercase">Live Signal &amp;
@@ -219,7 +240,7 @@
                 </div>
 
                 <!-- Right: Diagnostics & RF Interpretation (1/3) -->
-                <div class="col-span-1 flex flex-col gap-4 h-[calc(100vh-22rem)] min-h-[400px]">
+                <div class="col-span-1 min-w-0 flex flex-col gap-4 h-[calc(100vh-22rem)] min-h-[400px]">
                     <!-- Diagnostics Console -->
                     <div class="bg-slate-900 border border-slate-800 rounded p-5 flex flex-col flex-1 min-h-0 shadow-sm">
                         <div class="flex items-center justify-between mb-3 shrink-0">
@@ -342,7 +363,7 @@
 
     <!-- ═══════════════════════ FOOTER ═══════════════════════ -->
     <footer
-        class="flex items-center justify-between border-t border-slate-800 bg-slate-900/50 px-6 py-2 text-[10px] font-bold tracking-widest uppercase text-slate-600 shrink-0 z-10">
+        class="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-slate-800 bg-slate-900/50 px-6 py-2 text-[10px] font-bold tracking-widest uppercase text-slate-600 shrink-0 z-10">
         <span>AI Network Analyzer &bull; Scapy / RandomForest / LSTM</span>
         <span id="footer-ts">IDLE</span>
     </footer>
@@ -472,7 +493,7 @@
             const el = document.getElementById(id);
             if (!el) return;
             el.textContent = value + ' ' + unit;
-            el.classList.remove('text-cyan-400', 'text-rose-500', 'text-emerald-400');
+            el.classList.remove('text-cyan-400', 'text-rose-500', 'text-emerald-400', 'text-slate-500');
             el.classList.add(isAlert ? 'text-rose-500' : (id === 'm-forecast' ? 'text-emerald-400' : 'text-cyan-400'));
         }
 
@@ -505,6 +526,19 @@
             alertCounts = { latency_delay: 0, packet_loss: 0, anomaly: 0 };
             sessionAlertsHistory = [];
             processedBatchIds.clear();
+            lastBatchId = 0;
+            lastSample = null;
+            clearTimeout(freshnessTimer);
+            chartData.labels.length = 0;
+            chartData.datasets.forEach(ds => { ds.data.length = 0; });
+            consoleChart.update();
+            ['m-latency', 'm-forecast', 'm-jitter', 'm-loss', 'm-bandwidth'].forEach(id => {
+                const el = document.getElementById(id);
+                el.textContent = '--';
+                el.classList.remove('text-cyan-400', 'text-rose-500', 'text-emerald-400');
+                el.classList.add('text-slate-500');
+            });
+            document.getElementById('rf-interpretation-content').textContent = 'Awaiting session telemetry.';
         }
 
 
@@ -515,105 +549,180 @@
         let monitorInterval = null;
         let isMonitoring = false;
         let pieChartRef = null;
+        const POLL_MS = 2000;
+        const REQUEST_TIMEOUT_MS = 8000;
+        // 2s worker sleep + up to 2s probe + measured RF/XAI/LSTM max 2.171s
+        // (12 isolated runs, median 0.414s) + 2s polling + timestamp/scheduling margin.
+        // This is a telemetry freshness allowance, not a network health threshold.
+        const SAMPLE_MAX_AGE_MS = 12000;
+        const HEALTH_STATES = new Set(['OPTIMAL', 'DEGRADED', 'CRITICAL']);
+        let lifecycle = 0;
+        let telemetryRequest = null;
+        let controlPending = false;
+        let needsSessionSync = true;
+        let lastBatchId = 0;
+        let lastSample = null;
+        let freshnessTimer = null;
 
-        // Initialize state from backend on load
-        fetch('/api/telemetry')
-            .then(r => r.json())
-            .then(data => {
-                if (data.is_monitoring === true) {
-                    isMonitoring = true;
-                    activeSessionId = data.session_id;
-                    activeSessionGeneration = data.session_generation;
-                    resetSessionState(); // Clear local stats properly
+        function setText(id, text) {
+            const el = document.getElementById(id);
+            if (el.textContent !== text) el.textContent = text;
+        }
 
-                    document.getElementById('monitor-btn').textContent = 'Stop Monitoring Session';
-                    document.getElementById('monitor-btn').className = document.getElementById('monitor-btn').className
-                        .replace('bg-sky-600', 'bg-rose-600')
-                        .replace('hover:bg-sky-500', 'hover:bg-rose-500')
-                        .replace('shadow-[0_0_15px_rgba(2,132,199,0.3)]', 'shadow-[0_0_15px_rgba(225,29,72,0.3)]')
-                        .replace('border-sky-400/20', 'border-rose-400/20');
-                    monitorInterval = setInterval(streamTelemetry, 2000);
-                }
-            })
-            .catch(e => console.error(e));
+        // Backend strings are always text, never HTML. Styling comes from local callers.
+        function textElement(tag, className, text = '') {
+            const el = document.createElement(tag);
+            el.className = className;
+            el.textContent = text;
+            return el;
+        }
 
-        function toggleMonitoring() {
+        function showAvailability(label, explanation, stream = 'UNAVAILABLE') {
+            clearTimeout(freshnessTimer);
+            document.getElementById('network-health').dataset.state = 'UNAVAILABLE';
+            setText('health-state', label);
+            setText('health-explanation', explanation);
+            setText('stream-status', `TELEMETRY: ${stream}`);
+            setText('metrics-status', lastSample ? 'METRICS: LAST RECORDED (NOT LIVE)' : 'METRICS: AWAITING TELEMETRY');
+            const sampleTime = lastSample ? new Date(lastSample.timestamp * 1000).toISOString() : 'NONE';
+            setText('footer-ts', `LAST SAMPLE: ${sampleTime} // ${label.toUpperCase()}`);
+        }
+
+        function renderHealth() {
+            const sample = lastSample;
+            const age = sample ? Date.now() - sample.timestamp * 1000 : Infinity;
+            if (!sample || age < -1000 || age >= SAMPLE_MAX_AGE_MS) {
+                showAvailability('Telemetry stale', 'No recent completed sample. Waiting for fresh telemetry.', 'STALE');
+                return;
+            }
+            if (!HEALTH_STATES.has(sample.system_state)) {
+                showAvailability('Health unavailable', 'The backend did not supply a recognized health state.', 'RESPONDING');
+                return;
+            }
+            document.getElementById('network-health').dataset.state = sample.system_state;
+            setText('health-state', sample.system_state);
+            const explanation = typeof sample.diagnostic === 'string' ? sample.diagnostic.replace(/^\[[^\]]+\]\s*/, '').trim() : '';
+            setText('health-explanation', explanation || 'No diagnostic supplied by the backend.');
+            setText('stream-status', 'TELEMETRY: RESPONDING');
+            setText('metrics-status', 'METRICS: CURRENT SAMPLE');
+            setText('footer-ts', `LAST SAMPLE: ${new Date(sample.timestamp * 1000).toISOString()} // STATE: ${sample.system_state}`);
+            clearTimeout(freshnessTimer);
+            freshnessTimer = setTimeout(renderHealth, SAMPLE_MAX_AGE_MS - age);
+        }
+
+        // The timeout covers both response headers and JSON body consumption.
+        async function fetchJSON(url, options, controller) {
+            let timeout;
+            let onAbort;
+            const cancelled = new Promise((resolve, reject) => {
+                onAbort = () => reject(new Error('Request cancelled or timed out'));
+                controller.signal.addEventListener('abort', onAbort, { once: true });
+                timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+            });
+            try {
+                return await Promise.race([
+                    fetch(url, { ...options, signal: controller.signal }).then(r => {
+                        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                        return r.json();
+                    }),
+                    cancelled
+                ]);
+            } finally {
+                clearTimeout(timeout);
+                controller.signal.removeEventListener('abort', onAbort);
+            }
+        }
+
+        function startPolling() {
+            if (monitorInterval === null) monitorInterval = setInterval(streamTelemetry, POLL_MS);
+        }
+
+        function cancelPolling() {
+            lifecycle++;
+            clearInterval(monitorInterval);
+            monitorInterval = null;
+            clearTimeout(freshnessTimer);
+            if (telemetryRequest) telemetryRequest.controller.abort();
+            telemetryRequest = null;
+        }
+
+        function updateMonitorButton() {
             const btn = document.getElementById('monitor-btn');
-            btn.disabled = true; // disable until response
+            btn.textContent = isMonitoring ? 'Stop Monitoring Session' : 'Start Monitoring Session';
+            const from = isMonitoring ? 'sky' : 'rose';
+            const to = isMonitoring ? 'rose' : 'sky';
+            btn.className = btn.className.replace(`bg-${from}-600`, `bg-${to}-600`)
+                .replace(`hover:bg-${from}-500`, `hover:bg-${to}-500`)
+                .replace(`border-${from}-400/20`, `border-${to}-400/20`)
+                .replace(isMonitoring ? 'rgba(2,132,199,0.3)' : 'rgba(225,29,72,0.3)',
+                    isMonitoring ? 'rgba(225,29,72,0.3)' : 'rgba(2,132,199,0.3)');
+        }
 
-            if (!isMonitoring) {
-                // ── START ─────────────────────────────────────────────────────────
-                fetch('/api/control', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({action: 'start'})
-                })
-                .then(r => { if (!r.ok) throw new Error("Backend start failed"); return r.json(); })
-                .then(res => {
-                    btn.disabled = false;
-                    if (res.status === 'success' && res.is_monitoring === true && res.session_id !== null && res.session_id !== undefined) {
-                        isMonitoring = true;
-                        activeSessionId = res.session_id;
-                        activeSessionGeneration = res.session_generation !== undefined ? res.session_generation : null;
-                        resetSessionState();
-                        sessionStartTime = Date.now();
+        function adoptSession(data) {
+            if (data.session_id !== activeSessionId || data.session_generation !== activeSessionGeneration) {
+                resetSessionState();
+                activeSessionId = data.session_id;
+                activeSessionGeneration = data.session_generation;
+            }
+            isMonitoring = true;
+            updateMonitorButton();
+        }
 
-                        btn.textContent = 'Stop Monitoring Session';
-                        btn.className = btn.className
-                            .replace('bg-sky-600', 'bg-rose-600')
-                            .replace('hover:bg-sky-500', 'hover:bg-rose-500')
-                            .replace('shadow-[0_0_15px_rgba(2,132,199,0.3)]', 'shadow-[0_0_15px_rgba(225,29,72,0.3)]')
-                            .replace('border-sky-400/20', 'border-rose-400/20');
+        function monitoringStopped() {
+            const wasMonitoring = isMonitoring;
+            cancelPolling();
+            needsSessionSync = false;
+            isMonitoring = false;
+            activeSessionId = null;
+            activeSessionGeneration = null;
+            updateMonitorButton();
+            showAvailability('Monitoring stopped', 'Start a session to receive current network health.', 'STOPPED');
+            if (wasMonitoring) {
+                buildAnalyticsTab();
+                buildAlertCenter();
+            }
+        }
 
-                        appendLog('text-slate-500', 'text-slate-600', '[SESSION] Monitoring session started.', '');
-
-                        switchTab('live-stream');
-                        streamTelemetry();
-                        if (monitorInterval) clearInterval(monitorInterval);
-                        monitorInterval = setInterval(streamTelemetry, 2000);
-                    }
-                })
-                .catch(err => {
-                    btn.disabled = false;
-                    console.error("Start failed:", err);
-                    appendLog('text-rose-500', 'text-rose-600', '[ERROR] Failed to start monitoring session.', '');
-                });
-
-            } else {
-                // ── STOP ──────────────────────────────────────────────────────────
-                fetch('/api/control', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({action: 'stop'})
-                })
-                .then(r => { if (!r.ok) throw new Error("Backend stop failed"); return r.json(); })
-                .then(res => {
-                    btn.disabled = false;
-                    if (res.status === 'success' && res.is_monitoring === false) {
-                        isMonitoring = false;
-                        if (monitorInterval) clearInterval(monitorInterval);
-                        monitorInterval = null;
-
-                        btn.textContent = 'Start Monitoring Session';
-                        btn.className = btn.className
-                            .replace('bg-rose-600', 'bg-sky-600')
-                            .replace('hover:bg-rose-500', 'hover:bg-sky-500')
-                            .replace('shadow-[0_0_15px_rgba(225,29,72,0.3)]', 'shadow-[0_0_15px_rgba(2,132,199,0.3)]')
-                            .replace('border-rose-400/20', 'border-sky-400/20');
-
-                        appendLog('text-slate-500', 'text-slate-600', '[SESSION] Monitoring session paused.', '');
-
-                        // Route user straight to analytics (Step 4.2)
-                        buildAnalyticsTab();
-                        buildAlertCenter();
-                        switchTab('analytics');
-                    }
-                })
-                .catch(err => {
-                    btn.disabled = false;
-                    console.error("Stop failed:", err);
-                    appendLog('text-rose-500', 'text-rose-600', '[ERROR] Failed to stop monitoring session.', '');
-                });
+        async function toggleMonitoring() {
+            if (controlPending) return;
+            const action = isMonitoring ? 'stop' : 'start';
+            const btn = document.getElementById('monitor-btn');
+            controlPending = true;
+            btn.disabled = true;
+            cancelPolling();
+            showAvailability(action === 'start' ? 'Starting monitoring' : 'Stopping monitoring', 'Waiting for backend confirmation.', 'PENDING');
+            try {
+                const res = await fetchJSON('/api/control', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action })
+                }, new AbortController());
+                if (res.status !== 'success' || res.is_monitoring !== (action === 'start')) throw new Error('Unexpected control response');
+                if (action === 'start') {
+                    if (!Number.isInteger(res.session_id) || !Number.isInteger(res.session_generation)) throw new Error('Missing session identity');
+                    adoptSession(res);
+                    needsSessionSync = false;
+                    sessionStartTime = Date.now();
+                    showAvailability('Awaiting telemetry', 'Gathering the first completed sample.', 'WAITING');
+                    appendLog('text-slate-500', 'text-slate-600', '[SESSION] Monitoring session started.', '');
+                    switchTab('live-stream');
+                } else {
+                    monitoringStopped();
+                    appendLog('text-slate-500', 'text-slate-600', '[SESSION] Monitoring session paused.', '');
+                    switchTab('analytics');
+                }
+            } catch (err) {
+                // A timed-out POST may have succeeded server-side. Reconcile with GET;
+                // never automatically repeat a control operation.
+                needsSessionSync = true;
+                showAvailability('Telemetry unavailable', 'Could not confirm monitoring status. Reconnecting.');
+                appendLog('text-rose-500', 'text-rose-600', `[ERROR] Failed to ${action} monitoring session.`, '');
+            } finally {
+                controlPending = false;
+                btn.disabled = false;
+                if (isMonitoring || needsSessionSync) {
+                    startPolling();
+                    streamTelemetry();
+                }
             }
         }
 
@@ -726,14 +835,17 @@
                 const card = document.createElement('div');
                 card.className = `bg-slate-900 border border-slate-800 border-l-[4px] ${borderCls} rounded p-5 shadow-sm flex flex-col gap-3 hover:bg-slate-800/50 transition-colors`;
 
-                card.innerHTML = `
-                    <div class="flex items-center justify-between">
-                        <div class="font-mono text-[10px] text-slate-500 tracking-widest font-bold">${alert.timestamp}</div>
-                        <span class="px-2 py-0.5 rounded border ${tagCls} text-[9px] font-bold uppercase tracking-widest">${alert.state}</span>
-                    </div>
-                    <div class="text-sm text-slate-200 font-medium leading-relaxed">${alert.diagnostic}</div>
-                    ${alert.fix ? `<div class="mt-1 bg-slate-950/50 rounded p-3 text-sky-400 text-xs font-mono border border-sky-900/30 leading-relaxed shadow-inner"><span class="font-bold text-sky-500 uppercase tracking-widest text-[10px] block mb-1">Recommended Resolution Strategy</span>${alert.fix}</div>` : ''}
-                `;
+                const heading = textElement('div', 'flex items-center justify-between');
+                heading.append(
+                    textElement('div', 'font-mono text-[10px] text-slate-500 tracking-widest font-bold', alert.timestamp),
+                    textElement('span', `px-2 py-0.5 rounded border ${tagCls} text-[9px] font-bold uppercase tracking-widest`, alert.state)
+                );
+                card.append(heading, textElement('div', 'text-sm text-slate-200 font-medium leading-relaxed', alert.diagnostic));
+                if (alert.fix) {
+                    const fix = textElement('div', 'mt-1 bg-slate-950/50 rounded p-3 text-sky-400 text-xs font-mono border border-sky-900/30 leading-relaxed shadow-inner');
+                    fix.append(textElement('span', 'font-bold text-sky-500 uppercase tracking-widest text-[10px] block mb-1', 'Recommended Resolution Strategy'), String(alert.fix));
+                    card.append(fix);
+                }
                 container.appendChild(card);
             });
         }
@@ -750,11 +862,10 @@
             const entry = document.createElement('div');
             entry.className = `py-1.5 border-b border-slate-900/50 ${rowColor} leading-relaxed`;
 
-            let html = `<span class="${tsColor}">[${timeLabel}]</span> <span class="${rowColor} font-medium">${diagnostic}</span>`;
+            entry.append(textElement('span', tsColor, `[${timeLabel}]`), ' ', textElement('span', `${rowColor} font-medium`, diagnostic));
             if (recommendedFix && recommendedFix.trim() !== '') {
-                html += `<br><span class="text-slate-500 text-[10px] mt-0.5 inline-block">-> ${recommendedFix}</span>`;
+                entry.append(document.createElement('br'), textElement('span', 'text-slate-500 text-[10px] mt-0.5 inline-block', `-> ${recommendedFix}`));
             }
-            entry.innerHTML = html;
 
             // Prepend new row entry
             logger.insertBefore(entry, logger.firstChild);
@@ -770,14 +881,68 @@
         // 8. CORE TELEMETRY FETCH LOOP
         // ═══════════════════════════════════════════════════════════════════════════
 
-        function streamTelemetry() {
-            fetch('/api/telemetry/stream')
-                .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-                .then(data => {
-                    if (!isMonitoring || data.status === "warmup") return;
-                    if (data.session_id !== activeSessionId) return;
-                    if (activeSessionGeneration !== null && data.session_generation !== activeSessionGeneration) return;
-                    if (activeSessionGeneration === null && data.session_generation !== undefined) activeSessionGeneration = data.session_generation;
+        async function streamTelemetry() {
+            if (telemetryRequest || controlPending) return;
+            const request = { controller: new AbortController(), lifecycle };
+            const synchronize = needsSessionSync;
+            telemetryRequest = request;
+            try {
+                const data = await fetchJSON(synchronize ? '/api/telemetry' : '/api/telemetry/stream', {}, request.controller);
+                if (request.lifecycle !== lifecycle || telemetryRequest !== request) return;
+                acceptTelemetry(data, synchronize);
+            } catch (err) {
+                if (request.lifecycle !== lifecycle || telemetryRequest !== request) return;
+                showAvailability('Telemetry unavailable', 'The telemetry request failed or timed out. Retrying.');
+                appendLog('text-slate-500', 'text-slate-700', `[ERR] ${err.message}`, '');
+            } finally {
+                if (telemetryRequest === request) telemetryRequest = null;
+            }
+        }
+
+        function acceptTelemetry(data, synchronize) {
+            if (!data || typeof data.is_monitoring !== 'boolean' || !['success', 'warmup'].includes(data.status)) {
+                throw new Error('Invalid telemetry response');
+            }
+            if (!data.is_monitoring) {
+                monitoringStopped();
+                return;
+            }
+            if (!Number.isInteger(data.session_id) || !Number.isInteger(data.session_generation)) {
+                throw new Error('Missing session identity');
+            }
+            const sameSession = data.session_id === activeSessionId && data.session_generation === activeSessionGeneration;
+            if (!sameSession && activeSessionId !== null && !synchronize) {
+                // Confirm a changed session through the initialization endpoint before
+                // resetting statistics. In-flight requests are also guarded by lifecycle.
+                needsSessionSync = true;
+                showAvailability('Session changed', 'Confirming the current backend session.', 'SYNCHRONIZING');
+                return;
+            }
+            adoptSession(data);
+            needsSessionSync = false;
+            startPolling();
+            if (data.status === 'warmup') {
+                showAvailability('Awaiting telemetry', 'Gathering the first completed sample.', 'WAITING');
+                return;
+            }
+            if (!Number.isSafeInteger(data.batch_id) || data.batch_id < 1 ||
+                !Number.isFinite(data.timestamp) || data.timestamp <= 0 || data.timestamp * 1000 > Date.now() + 1000) {
+                showAvailability('Sample unavailable', 'The completed sample has invalid identity or timing.', 'RESPONDING');
+                return;
+            }
+            if (data.batch_id < lastBatchId || (lastSample && data.timestamp < lastSample.timestamp)) return;
+            if (data.batch_id === lastBatchId) {
+                // Repeated HTTP responses neither refresh the sample time nor add history.
+                renderHealth();
+                return;
+            }
+            lastBatchId = data.batch_id;
+            lastSample = data;
+            renderHealth();
+            renderTelemetry(data);
+        }
+
+        function renderTelemetry(data) {
 
                     const metrics = data.metrics || {};
                     const predictions = data.predictions || {};
@@ -795,11 +960,11 @@
                     const forecastRaw = data.forecasted_latency ?? predictions.forecasted_latency ?? null;
                     const forecast = (forecastRaw !== null && forecastRaw !== undefined) ? safeNum(forecastRaw) : null;
 
-                    const systemState = data.system_state || 'OPTIMAL';
-                    const diagnostic = data.diagnostic || '[INFO] Network traffic is smooth and normal.';
+                    const systemState = HEALTH_STATES.has(data.system_state) ? data.system_state : null;
+                    const diagnostic = typeof data.diagnostic === 'string' && data.diagnostic ? data.diagnostic : '[INFO] Diagnostic unavailable.';
                     const recommendedFix = data.recommended_fix || '';
 
-                    const timeLabel = nowLabel();
+                    const timeLabel = new Date(data.timestamp * 1000).toLocaleTimeString('en-US', { hour12: false });
                     const batchId = data.batch_id;
                     const isNewBatch = (batchId !== undefined && !processedBatchIds.has(batchId));
 
@@ -887,48 +1052,46 @@
                         let rowColor, tsColor;
                         if (systemState === 'CRITICAL') { rowColor = 'text-rose-500'; tsColor = 'text-rose-700'; }
                         else if (systemState === 'DEGRADED') { rowColor = 'text-amber-500'; tsColor = 'text-amber-700'; }
-                        else { rowColor = 'text-emerald-400'; tsColor = 'text-slate-700'; }
+                        else if (systemState === 'OPTIMAL') { rowColor = 'text-emerald-400'; tsColor = 'text-slate-700'; }
+                        else { rowColor = 'text-slate-400'; tsColor = 'text-slate-700'; }
                         appendLog(rowColor, tsColor, diagnostic, recommendedFix);
 
                         // ── RF Interpretation ──────────────────────────────────────────────
                         const interpContainer = document.getElementById('rf-interpretation-content');
                         if (interpContainer) {
                             const interp = data.interpretability;
-                            if (!interp || !interp.top_features) {
-                                interpContainer.innerHTML = '<span class="text-slate-500">Interpretation unavailable.</span>';
+                            if (!interp || !Array.isArray(interp.top_features)) {
+                                interpContainer.replaceChildren(textElement('span', 'text-slate-500', 'Interpretation unavailable.'));
                             } else {
-                                let classificationHtml = `<div class="mb-2"><span class="text-slate-500 uppercase tracking-widest text-[10px]">Classification:</span> <strong class="${data.classification === 'Abnormal' ? 'text-rose-400' : 'text-emerald-400'}">${data.classification}</strong>`;
+                                const classification = textElement('div', 'mb-2');
+                                classification.append(textElement('span', 'text-slate-500 uppercase tracking-widest text-[10px]', 'Classification:'), ' ',
+                                    textElement('strong', data.classification === 'Abnormal' ? 'text-rose-400' : 'text-emerald-400', data.classification));
                                 if (interp.classification_confidence !== undefined) {
-                                    classificationHtml += ` <span class="text-slate-500 ml-2 text-[10px]">(Model probability: ${(interp.classification_confidence * 100).toFixed(1)}%)</span>`;
+                                    const probability = Number.isFinite(interp.classification_confidence) ? (interp.classification_confidence * 100).toFixed(1) : String(interp.classification_confidence);
+                                    classification.append(' ', textElement('span', 'text-slate-500 ml-2 text-[10px]', `(Model probability: ${probability}%)`));
                                 }
-                                classificationHtml += `</div>`;
-
-                                let featuresHtml = `<div class="mt-2 mb-2"><span class="text-slate-500 uppercase tracking-widest text-[10px]">Top Global Features:</span></div>`;
+                                const heading = textElement('div', 'mt-2 mb-2');
+                                heading.append(textElement('span', 'text-slate-500 uppercase tracking-widest text-[10px]', 'Top Global Features:'));
+                                interpContainer.replaceChildren(classification, heading);
                                 interp.top_features.forEach(f => {
-                                    featuresHtml += `<div class="mb-2 pl-2 border-l-2 border-slate-700">
-                                        <div class="text-slate-300 font-bold">${f.feature_name}</div>
-                                        <div class="text-[10px] text-slate-500">Current: <span class="text-cyan-400">${f.current_value}</span> | Global importance: ${f.importance_percent.toFixed(1)}%</div>
-                                    </div>`;
+                                    const feature = textElement('div', 'mb-2 pl-2 border-l-2 border-slate-700');
+                                    const values = textElement('div', 'text-[10px] text-slate-500', 'Current: ');
+                                    const importance = Number.isFinite(f.importance_percent) ? f.importance_percent.toFixed(1) : String(f.importance_percent);
+                                    values.append(textElement('span', 'text-cyan-400', f.current_value), ` | Global importance: ${importance}%`);
+                                    feature.append(textElement('div', 'text-slate-300 font-bold', f.feature_name), values);
+                                    interpContainer.append(feature);
                                 });
-
-                                const noteHtml = `<div class="mt-3 pt-2 border-t border-slate-800 text-[9px] text-slate-600 leading-tight">
-                                    Feature importance describes the Random Forest model globally. Current values are shown for context and are not causal explanations of an individual prediction.
-                                </div>`;
-
-                                interpContainer.innerHTML = classificationHtml + featuresHtml + noteHtml;
+                                interpContainer.append(textElement('div', 'mt-3 pt-2 border-t border-slate-800 text-[9px] text-slate-600 leading-tight',
+                                    'Feature importance describes the Random Forest model globally. Current values are shown for context and are not causal explanations of an individual prediction.'));
                             }
                         }
                     }
 
-                    // ── Footer ───────────────────────────────────────────────────────
-                    const ft = document.getElementById('footer-ts');
-                    if (ft) ft.textContent = `LAST SYNC: ${timeLabel} // STATE: ${systemState}`;
-                })
-                .catch(err => {
-                    console.error('[NOC] Fetch error:', err);
-                    appendLog('text-slate-500', 'text-slate-700', `[ERR] ${err.message}`, '');
-                });
         }
+
+        // Render the initial snapshot immediately; retry failures without overlapping GETs.
+        startPolling();
+        streamTelemetry();
 
     </script>
 </body>
