@@ -242,12 +242,22 @@ def get_session_details(session_id):
         cur.execute("SELECT COUNT(*) as cnt FROM telemetry WHERE session_id=?", (session_id,))
         telemetry_count = cur.fetchone()['cnt']
         
-        cur.execute("SELECT alert_type, severity, diagnostic, timestamp FROM alerts WHERE session_id=? ORDER BY id ASC", (session_id,))
+        cur.execute("SELECT batch_id, alert_type, severity, diagnostic, timestamp, recommended_fix FROM alerts WHERE session_id=? ORDER BY id ASC", (session_id,))
         alerts = [dict(r) for r in cur.fetchall()]
+
+        # Read-only history for Activity Log reconciliation after missed live polls.
+        # Individual alerts and their aggregates remain the authoritative full record.
+        cur.execute("""
+            SELECT session_id, batch_id, timestamp, latency_ms, packet_loss_pct,
+                   rf_classification, system_state, diagnostic, recommended_fix
+            FROM telemetry WHERE session_id=? ORDER BY batch_id ASC
+        """, (session_id,))
+        activity_samples = [dict(r) for r in cur.fetchall()]
         
         return {
             "session": dict(session),
             "report": dict(report) if report else None,
             "telemetry_count": telemetry_count,
-            "alerts": alerts
+            "alerts": alerts,
+            "activity_samples": activity_samples
         }

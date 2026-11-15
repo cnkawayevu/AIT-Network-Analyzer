@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI-Powered Network Performance Analyzer // NOC Dashboard</title>
+    <title>AI-Powered Network Performance Analyzer</title>
 
     <!-- Tailwind CSS via CDN (sole CSS framework) -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -22,9 +22,16 @@
                     },
                     colors: {
                         slate: {
+                            100: '#e5e9f0',
+                            200: '#e5e9f0',
+                            300: '#b4bdcb',
+                            400: '#8f9bad',
+                            500: '#8f9bad',
+                            700: '#2b3850',
+                            800: '#1f2a3d',
                             850: '#151e2e',
-                            900: '#0f172a',
-                            950: '#020617',
+                            900: '#111827',
+                            950: '#0b1120',
                         }
                     }
                 }
@@ -52,28 +59,75 @@
             background: #475569;
         }
 
-        /* Pulsing dot for live badge */
-        @keyframes pulse-dot {
-
-            0%,
-            100% {
-                opacity: 1;
-                transform: scale(1);
-            }
-
-            50% {
-                opacity: 0.5;
-                transform: scale(1.4);
-            }
+        /* Approved final-polish tokens; state and freshness remain backend-driven. */
+        :root {
+            --bg: #0b1120;
+            --surface: #111827;
+            --border: #1f2a3d;
+            --border-control: #2b3850;
+            --text: #e5e9f0;
+            --secondary: #b4bdcb;
+            --caption: #8f9bad;
+            --accent: #38bdf8;
+            --sans: Inter, "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
         }
-
-        .pulse-dot {
-            animation: pulse-dot 1.4s ease-in-out infinite;
+        body { font-family: var(--sans); font-size: 13px; line-height: 1.45; }
+        body .font-mono { font-family: var(--sans); font-variant-numeric: tabular-nums; }
+        body .shadow-sm { box-shadow: none; }
+        main .bg-slate-900 { border-radius: 6px; }
+        header { min-height: 56px; }
+        header h1 { font-size: 15px; letter-spacing: 0; }
+        #stream-status { background: transparent; border: 0; padding: 0; font-size: 11px; font-weight: 500; color: var(--caption); }
+        #monitor-btn { min-height: 32px; border-radius: 6px; transform: none; }
+        #monitor-btn.bg-sky-600 { background: #0369a1; }
+        #monitor-btn.bg-sky-600:hover { background: #075985; }
+        #monitor-btn.bg-rose-600 { background: #be123c; }
+        #monitor-btn.bg-rose-600:hover { background: #9f1239; }
+        nav[role="tablist"] { min-height: 40px; padding-top: 0; padding-bottom: 0; gap: 24px; align-items: stretch; }
+        nav .tab-btn { background: transparent; padding: 0 2px; font-size: 13px; font-weight: 500; }
+        nav .tab-btn[aria-selected="true"] { font-weight: 600; border-bottom-color: var(--accent); }
+        main .metric-val, #tab-analytics section:first-of-type > div > p[id] {
+            font-family: var(--sans); color: var(--text); font-size: 28px;
+            font-weight: 600; line-height: 1.1; letter-spacing: -0.01em; margin-top: 6px;
         }
-
-        /* Metric value color transition */
-        .metric-val {
-            transition: color 0.3s ease;
+        .metric-unit { font-size: 13px; font-weight: 500; color: var(--caption); letter-spacing: 0; }
+        #console-logs { padding: 0; color: var(--secondary); }
+        #console-logs > div:not(.log-row) { padding: 8px 10px; }
+        .log-row { display: grid; grid-template-columns: 6px 62px minmax(0, 1fr); gap: 0 8px; padding: 8px 10px; border-bottom: 1px solid var(--border); font-size: 12px; line-height: 1.45; color: var(--text); overflow-wrap: anywhere; }
+        .log-row .severity-dot { width: 6px; height: 6px; margin-top: 6px; border-radius: 50%; background: currentColor; }
+        .log-row time, #alert-list-container time { font-family: Consolas, "Liberation Mono", monospace; font-size: 11px; color: var(--caption); }
+        .log-fix { grid-column: 3; margin-top: 4px; color: var(--secondary); font-size: 11px; }
+        #metrics-table-body td:first-child, #metrics-table-body td:last-child { color: var(--text); font-weight: 400; }
+        #alert-list-container > div { box-shadow: none; }
+        #alert-list-container details summary { font-size: 12px; }
+        .network-health {
+            flex: 1 1 24rem;
+            min-width: 0;
+            max-width: 38rem;
+            padding: 6px 10px;
+            border: 1px solid var(--border-control);
+            border-radius: 6px;
+            background: var(--bg);
+            color: var(--secondary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .network-health::before { content: ''; width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--caption); }
+        .network-health > p:first-child { font-weight: 400; color: var(--caption); }
+        #health-state { color: var(--text); }
+        .network-health[data-state="OPTIMAL"]::before { background: #34d399; }
+        .network-health[data-state="DEGRADED"]::before { background: #fbbf24; }
+        .network-health[data-state="CRITICAL"]::before { background: #f87171; }
+        .network-health[data-state="OPTIMAL"] #health-state { color: #6ee7b7; }
+        .network-health[data-state="DEGRADED"] #health-state { color: #fcd34d; }
+        .network-health[data-state="CRITICAL"] #health-state { color: #fca5a5; }
+        .network-health > [aria-hidden="true"] { font-size: 0; width: 1px; height: 14px; flex: none; background: var(--border-control); }
+        #health-explanation { overflow-wrap: anywhere; color: var(--secondary); }
+        @media (max-width: 639px) {
+            .network-health { flex-wrap: wrap; }
+            #health-explanation { flex-basis: 100%; }
+            nav[role="tablist"] { gap: 16px; }
         }
     </style>
 </head>
@@ -82,164 +136,139 @@
 
     <!-- ═══════════════════════ TOP HEADER ═══════════════════════ -->
     <header
-        class="flex items-center justify-between border-b border-slate-800 bg-slate-900/80 backdrop-blur-sm px-6 py-4 shrink-0 shadow-sm z-20 relative">
-        <div class="flex items-center gap-4">
+        class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 bg-slate-900 px-6 py-2.5 shrink-0 z-20 relative">
+        <div class="flex items-center gap-3 shrink-0">
             <div>
-                <h1 class="text-lg font-bold tracking-tight text-slate-100 uppercase">
-                    Network Operations Center
+                <h1 class="text-base font-semibold tracking-tight text-slate-100">
+                    AI-Powered Network Performance Analyzer
                 </h1>
-                <p class="text-[11px] text-slate-500 tracking-widest uppercase mt-0.5">
-                    AI-Powered Performance Analyzer &bull; SCAPY / RF / LSTM
+                <p class="text-[11px] text-slate-400 mt-0.5">
+                    Packet Capture &bull; Random Forest &bull; LSTM Forecasting
                 </p>
             </div>
         </div>
 
-        <div class="flex items-center gap-5">
-            <!-- Live badge -->
-            <span
-                class="inline-flex items-center gap-2 rounded border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-emerald-400">
-                <span
-                    class="pulse-dot h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]"></span>
-                LIVE SCAPY STREAM
-            </span>
+        <div id="network-health" class="network-health" data-state="UNAVAILABLE" role="status" aria-live="polite" aria-atomic="true">
+            <p class="text-xs font-semibold whitespace-nowrap shrink-0">Network Health:
+                <span id="health-state" class="font-semibold">Checking availability</span>
+            </p>
+            <span class="text-slate-600 text-xs select-none" aria-hidden="true">&bull;</span>
+            <p id="health-explanation" class="text-xs leading-snug text-slate-200">Waiting for monitoring status.</p>
+        </div>
 
-            <span class="text-[10px] text-slate-500 font-mono font-bold tracking-widest">
-                POLL INTERVAL: <span class="text-sky-400">2.0s</span>
+        <div class="flex flex-wrap items-center gap-2.5 shrink-0">
+            <!-- HTTP telemetry availability; this does not assert capture health. -->
+            <span id="stream-status"
+                class="inline-flex items-center rounded border border-slate-700 bg-slate-800/80 px-2.5 py-1 text-[11px] font-mono font-semibold text-slate-300">
+                TELEMETRY: CHECKING
             </span>
 
             <!-- Monitor toggle button -->
-            <button id="monitor-btn" onclick="toggleMonitoring()" class="rounded px-6 py-2 text-xs font-bold text-white uppercase tracking-wider
+            <button id="monitor-btn" onclick="toggleMonitoring()" class="rounded px-4 py-1.5 text-xs font-semibold text-white
                            bg-sky-600 hover:bg-sky-500 active:scale-95
-                           transition-all duration-150 shadow-[0_0_15px_rgba(2,132,199,0.3)]
-                           focus:outline-none border border-sky-400/20">
+                           transition-colors duration-150
+                           focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300
+                           disabled:opacity-60 disabled:cursor-not-allowed border border-sky-400/20">
                 Start Monitoring Session
             </button>
         </div>
     </header>
 
     <!-- ═══════════════════════ TAB NAVIGATION BAR ═══════════════════════ -->
-    <nav
-        class="flex items-center gap-1 border-b border-slate-800/50 bg-slate-950 px-6 py-2 shrink-0 relative z-10 shadow-sm">
-        <button id="tab-btn-live-stream" onclick="switchTab('live-stream')"
-            class="tab-btn active bg-slate-800 text-slate-200 border-b-2 border-sky-500 px-4 py-2 text-xs font-bold uppercase tracking-wider transition-colors">
-            LIVE MONITOR
+    <nav role="tablist" aria-label="Dashboard views"
+        class="flex items-center gap-1 border-b border-slate-800 bg-slate-950 px-6 py-1.5 shrink-0 relative z-10">
+        <button id="tab-btn-live-stream" role="tab" aria-selected="true" aria-controls="tab-live-stream" onclick="switchTab('live-stream')"
+            class="tab-btn active bg-slate-800 text-slate-100 border-b-2 border-sky-500 px-4 py-1.5 text-xs font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400">
+            Live Monitor
         </button>
-        <button id="tab-btn-analytics" onclick="switchTab('analytics')"
-            class="tab-btn text-slate-500 hover:text-slate-300 hover:bg-slate-800/50 border-b-2 border-transparent px-4 py-2 text-xs font-bold uppercase tracking-wider transition-colors">
-            SESSION ANALYTICS
+        <button id="tab-btn-analytics" role="tab" aria-selected="false" aria-controls="tab-analytics" onclick="switchTab('analytics')"
+            class="tab-btn text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 border-b-2 border-transparent px-4 py-1.5 text-xs font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400">
+            Session Analytics
         </button>
-        <button id="tab-btn-alert-center" onclick="switchTab('alert-center')"
-            class="tab-btn text-slate-500 hover:text-slate-300 hover:bg-slate-800/50 border-b-2 border-transparent px-4 py-2 text-xs font-bold uppercase tracking-wider transition-colors">
-            ALERT CENTER
+        <button id="tab-btn-alert-center" role="tab" aria-selected="false" aria-controls="tab-alert-center" onclick="switchTab('alert-center')"
+            class="tab-btn text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 border-b-2 border-transparent px-4 py-1.5 text-xs font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400">
+            Alert Center
         </button>
     </nav>
 
     <!-- ═══════════════════════ TAB CONTENT AREA ═══════════════════════ -->
-    <main class="flex-1 flex flex-col overflow-hidden px-6 py-6 gap-6 relative z-0">
+    <main class="flex-1 min-h-0 flex flex-col overflow-y-auto px-6 py-4 gap-4 relative z-0">
 
         <!-- ─────────────── TAB: LIVE STREAM (Step 1) ─────────────── -->
-        <div id="tab-live-stream" class="flex flex-col gap-6 flex-1">
+        <div id="tab-live-stream" role="tabpanel" aria-labelledby="tab-btn-live-stream" class="flex flex-col gap-4 flex-1">
 
             <!-- Metrics Cards Grid (Step 1.2) -->
-            <section class="grid grid-cols-5 gap-4 shrink-0">
+            <section aria-label="Current readings" aria-describedby="metrics-status" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3.5 shrink-0">
+                <div class="col-span-full flex flex-wrap items-center justify-between gap-2">
+                    <h2 class="text-xs font-semibold text-slate-300">Current readings</h2>
+                    <p id="metrics-status" class="text-[11px] font-mono text-slate-400" role="status" aria-atomic="true">METRICS: AWAITING TELEMETRY</p>
+                </div>
                 <div
-                    class="bg-slate-900 border border-slate-800 rounded p-4 hover:border-slate-700 transition-colors shadow-sm relative overflow-hidden group">
-                    <div
-                        class="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-cyan-500/20 to-transparent group-hover:via-cyan-500/50 transition-all">
-                    </div>
-                    <p class="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1">Live Latency</p>
-                    <p id="m-latency" class="metric-val text-3xl font-bold font-mono text-cyan-400 tabular-nums">-- ms
-                    </p>
-                    <p class="mt-2 text-[10px] text-slate-500 uppercase tracking-wider font-semibold">ICMP RTT TO 1.1.1.1</p>
+                    class="bg-slate-900 border border-slate-800 rounded p-3.5 shadow-sm relative overflow-hidden">
+                    <p class="text-xs text-slate-300 font-semibold mb-1">Latency</p>
+                    <p id="m-latency" class="metric-val text-2xl xl:text-3xl font-bold font-mono text-cyan-400 tabular-nums">--<small class="metric-unit"> ms</small></p>
+                    <p class="mt-1.5 text-[11px] text-slate-400">Round-trip time to 1.1.1.1 (ICMP)</p>
                 </div>
 
                 <div
-                    class="bg-slate-900 border border-slate-800 rounded p-4 hover:border-slate-700 transition-colors shadow-sm relative overflow-hidden group">
-                    <div
-                        class="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-emerald-500/20 to-transparent group-hover:via-emerald-500/50 transition-all">
-                    </div>
-                    <p class="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1">LSTM Forecast</p>
-                    <p id="m-forecast" class="metric-val text-3xl font-bold font-mono text-emerald-400 tabular-nums">--
-                        ms</p>
-                    <p class="mt-2 text-[10px] text-slate-500 uppercase tracking-wider font-semibold">ONE-STEP-AHEAD FORECAST</p>
+                    class="bg-slate-900 border border-slate-800 rounded p-3.5 shadow-sm relative overflow-hidden">
+                    <p class="text-xs text-slate-300 font-semibold mb-1">Next-step prediction (LSTM)</p>
+                    <p id="m-forecast" class="metric-val text-2xl xl:text-3xl font-bold font-mono text-emerald-400 tabular-nums">--<small class="metric-unit"> ms</small></p>
+                    <p id="m-forecast-note" class="mt-1.5 text-[11px] text-slate-400">Next reading (warms up over 10 samples)</p>
                 </div>
 
                 <div
-                    class="bg-slate-900 border border-slate-800 rounded p-4 hover:border-slate-700 transition-colors shadow-sm relative overflow-hidden group">
-                    <div
-                        class="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-cyan-500/20 to-transparent group-hover:via-cyan-500/50 transition-all">
-                    </div>
-                    <p class="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1">Jitter</p>
-                    <p id="m-jitter" class="metric-val text-3xl font-bold font-mono text-cyan-400 tabular-nums">-- ms
-                    </p>
-                    <p class="mt-2 text-[10px] text-slate-500 uppercase tracking-wider font-semibold">ICMP RTT VARIATION</p>
+                    class="bg-slate-900 border border-slate-800 rounded p-3.5 shadow-sm relative overflow-hidden">
+                    <p class="text-xs text-slate-300 font-semibold mb-1">Jitter</p>
+                    <p id="m-jitter" class="metric-val text-2xl xl:text-3xl font-bold font-mono text-cyan-400 tabular-nums">--<small class="metric-unit"> ms</small></p>
+                    <p class="mt-1.5 text-[11px] text-slate-400">Variation in response time</p>
                 </div>
 
                 <div
-                    class="bg-slate-900 border border-slate-800 rounded p-4 hover:border-slate-700 transition-colors shadow-sm relative overflow-hidden group">
-                    <div
-                        class="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-cyan-500/20 to-transparent group-hover:via-cyan-500/50 transition-all">
-                    </div>
-                    <p class="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1">Packet Loss</p>
-                    <p id="m-loss" class="metric-val text-3xl font-bold font-mono text-cyan-400 tabular-nums">-- %</p>
-                    <p class="mt-2 text-[10px] text-slate-500 uppercase tracking-wider font-semibold">ICMP PROBE LOSS</p>
+                    class="bg-slate-900 border border-slate-800 rounded p-3.5 shadow-sm relative overflow-hidden">
+                    <p class="text-xs text-slate-300 font-semibold mb-1">ICMP Probe Loss</p>
+                    <p id="m-loss" class="metric-val text-2xl xl:text-3xl font-bold font-mono text-cyan-400 tabular-nums">--<small class="metric-unit"> %</small></p>
+                    <p class="mt-1.5 text-[11px] text-slate-400">Unanswered probes (last 10 checks)</p>
                 </div>
 
                 <div
-                    class="bg-slate-900 border border-slate-800 rounded p-4 hover:border-slate-700 transition-colors shadow-sm relative overflow-hidden group">
-                    <div
-                        class="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-cyan-500/20 to-transparent group-hover:via-cyan-500/50 transition-all">
-                    </div>
-                    <p class="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1">Throughput</p>
-                    <p id="m-bandwidth" class="metric-val text-3xl font-bold font-mono text-cyan-400 tabular-nums">-- Mbps
-                    </p>
-                    <p class="mt-2 text-[10px] text-slate-500 uppercase tracking-wider font-semibold">CAPTURED HOST TRAFFIC</p>
+                    class="bg-slate-900 border border-slate-800 rounded p-3.5 shadow-sm relative overflow-hidden">
+                    <p class="text-xs text-slate-300 font-semibold mb-1">Throughput</p>
+                    <p id="m-bandwidth" class="metric-val text-2xl xl:text-3xl font-bold font-mono text-cyan-400 tabular-nums">--<small class="metric-unit"> Mbps</small></p>
+                    <p class="mt-1.5 text-[11px] text-slate-400">Captured host IPv4 traffic rate</p>
                 </div>
             </section>
 
             <!-- Locked Height Layout: Chart + Diagnostics (Step 1.3 & 1.4) -->
-            <section class="grid grid-cols-3 gap-6 flex-1 min-h-0">
+            <section class="grid grid-cols-1 lg:grid-cols-3 gap-4 flex-1 min-h-0">
                 <!-- Left: Live chart (2/3) -->
                 <div
-                    class="col-span-2 bg-slate-900 border border-slate-800 rounded p-5 flex flex-col h-[calc(100vh-22rem)] min-h-[400px] shadow-sm">
-                    <div class="flex items-center justify-between mb-4 shrink-0">
-                        <div>
-                            <h2 class="text-xs font-bold text-slate-200 tracking-widest uppercase">Live Signal &amp;
-                                Sequential Forecast Engine</h2>
-                            <p class="text-[10px] text-slate-500 mt-1 uppercase tracking-wider font-semibold">Rolling
-                                Temporal Telemetry Window</p>
-                        </div>
-                        <span
-                            class="text-[10px] text-slate-500 border border-slate-700 bg-slate-950 rounded px-2 py-1 font-mono font-bold tracking-widest">MAX
-                            20 PTS</span>
+                    class="lg:col-span-2 min-w-0 bg-slate-900 border border-slate-800 rounded p-4 flex flex-col h-[calc(100vh-20.5rem)] min-h-[320px] shadow-sm">
+                    <div class="mb-2.5 shrink-0">
+                        <h2 class="text-sm font-semibold text-slate-200">Measured and predicted latency</h2>
+                        <p class="text-xs text-slate-400 mt-0.5">Up to 20 accepted samples. Dashed line: next-step LSTM prediction, plotted at issue time.</p>
                     </div>
                     <div class="relative flex-1 min-h-0">
-                        <canvas id="consoleChart"></canvas>
+                        <canvas id="consoleChart" role="img" aria-label="Measured latency and next-step LSTM prediction in milliseconds. Predictions are plotted at issue time; current values are in the reading cards above."></canvas>
                     </div>
                 </div>
 
                 <!-- Right: Diagnostics & RF Interpretation (1/3) -->
-                <div class="col-span-1 flex flex-col gap-4 h-[calc(100vh-22rem)] min-h-[400px]">
-                    <!-- Diagnostics Console -->
-                    <div class="bg-slate-900 border border-slate-800 rounded p-5 flex flex-col flex-1 min-h-0 shadow-sm">
-                        <div class="flex items-center justify-between mb-3 shrink-0">
-                            <h2 class="text-xs font-bold text-slate-200 tracking-widest uppercase">Diagnostics</h2>
-                            <span
-                                class="text-[10px] border border-slate-700 bg-slate-950 text-slate-500 rounded px-2 py-1 font-mono font-bold tracking-widest">LIVE
-                                STREAM</span>
-                        </div>
+                <div class="col-span-1 min-w-0 flex flex-col gap-3.5 h-[calc(100vh-20.5rem)] min-h-[320px]">
+                    <!-- Activity Log -->
+                    <div class="bg-slate-900 border border-slate-800 rounded p-3.5 flex flex-col flex-1 min-h-0 shadow-sm">
+                        <h2 class="text-sm font-semibold text-slate-200 mb-2 shrink-0">Activity log</h2>
                         <div id="console-logs"
-                            class="flex-1 overflow-y-auto min-h-0 rounded bg-black border border-slate-800 p-4 font-mono text-[11px] text-emerald-400 shadow-inner flex flex-col">
-                            <div class="text-slate-600 mb-2">[INIT] Awaiting first telemetry frame sync from
-                                /api/telemetry/stream...</div>
+                            class="flex-1 overflow-y-auto min-h-0 rounded bg-slate-950 border border-slate-800 p-3 font-mono text-xs text-emerald-400 flex flex-col">
+                            <div class="text-slate-400 mb-1.5">Start a monitoring session to view live activity and diagnostic details.</div>
                         </div>
                     </div>
 
                     <!-- RF Model Interpretation Panel -->
-                    <div class="bg-slate-900 border border-slate-800 rounded p-5 flex flex-col shrink-0 shadow-sm">
-                        <h2 class="text-xs font-bold text-slate-200 tracking-widest uppercase mb-3">RF Model Interpretation</h2>
-                        <div id="rf-interpretation-content" class="text-xs font-mono text-slate-400">
-                            Awaiting inference data...
+                    <div class="bg-slate-900 border border-slate-800 rounded p-3.5 flex flex-col shrink-0 shadow-sm">
+                        <h2 class="text-sm font-semibold text-slate-200 mb-2">Traffic classification (Random Forest)</h2>
+                        <div id="rf-interpretation-content" class="text-xs font-mono text-slate-300">
+                            Awaiting session telemetry.
                         </div>
                     </div>
                 </div>
@@ -249,60 +278,69 @@
 
 
         <!-- ─────────────── TAB: SESSION ANALYTICS (Step 2) ─────────────── -->
-        <div id="tab-analytics" class="hidden flex-col gap-6 flex-1 overflow-y-auto">
+        <div id="tab-analytics" role="tabpanel" aria-labelledby="tab-btn-analytics" class="hidden flex-col gap-4 flex-1 overflow-y-auto">
+
+            <div class="border-b border-slate-800 pb-2.5 shrink-0">
+                <h2 class="text-sm font-semibold text-slate-200">Last completed session</h2>
+                <p class="text-xs text-slate-400 mt-0.5">Summary of the most recently completed monitoring session. Live network health remains in the header above.</p>
+            </div>
 
             <!-- Top Row Summary (Step 2.1) -->
             <section class="grid grid-cols-2 md:grid-cols-4 gap-4 shrink-0">
-                <div class="bg-slate-900 border border-slate-800 rounded p-5 shadow-sm">
-                    <p class="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-2">Duration</p>
-                    <p id="an-duration" class="text-3xl font-bold font-mono text-cyan-400 tabular-nums">--</p>
+                <div class="bg-slate-900 border border-slate-800 rounded p-4 shadow-sm">
+                    <p class="text-xs text-slate-300 font-semibold mb-1">Session duration</p>
+                    <p id="an-duration" class="text-2xl xl:text-3xl font-bold font-mono text-cyan-400 tabular-nums">--</p>
                 </div>
-                <div class="bg-slate-900 border border-slate-800 rounded p-5 shadow-sm">
-                    <p class="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-2">Total Triggers</p>
-                    <p id="an-total-alerts" class="text-3xl font-bold font-mono text-rose-500 tabular-nums">--</p>
+                <div class="bg-slate-900 border border-slate-800 rounded p-4 shadow-sm">
+                    <p class="text-xs text-slate-300 font-semibold mb-1">Total alerts</p>
+                    <p id="an-total-alerts" class="text-2xl xl:text-3xl font-bold font-mono text-rose-500 tabular-nums">--</p>
                 </div>
-                <div class="bg-slate-900 border border-slate-800 rounded p-5 shadow-sm">
-                    <p class="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-2">AI Security Anomalies
-                    </p>
-                    <p id="an-anomalies" class="text-3xl font-bold font-mono text-rose-500 tabular-nums">--</p>
+                <div class="bg-slate-900 border border-slate-800 rounded p-4 shadow-sm">
+                    <p class="text-xs text-slate-300 font-semibold mb-1">Unusual traffic flags</p>
+                    <p id="an-anomalies" class="text-2xl xl:text-3xl font-bold font-mono text-rose-500 tabular-nums">--</p>
                 </div>
-                <div class="bg-slate-900 border border-slate-800 rounded p-5 shadow-sm">
-                    <p class="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-2">Mean Latency</p>
-                    <p id="an-avg-latency" class="text-3xl font-bold font-mono text-emerald-400 tabular-nums">--</p>
+                <div class="bg-slate-900 border border-slate-800 rounded p-4 shadow-sm">
+                    <p class="text-xs text-slate-300 font-semibold mb-1">Average latency</p>
+                    <p id="an-avg-latency" class="text-2xl xl:text-3xl font-bold font-mono text-emerald-400 tabular-nums">--</p>
                 </div>
             </section>
 
             <!-- Split-Card Dashboard Section (Step 2.2) -->
-            <section class="grid grid-cols-3 gap-6 shrink-0 flex-1 min-h-[400px]">
+            <section class="grid grid-cols-1 lg:grid-cols-3 gap-4 shrink-0 items-start">
                 <!-- Left Column (1/3): Doughnut Chart -->
                 <div
-                    class="col-span-1 bg-slate-900 border border-slate-800 rounded p-6 shadow-sm flex flex-col items-center justify-center">
+                    class="col-span-1 bg-slate-900 border border-slate-800 rounded p-4 shadow-sm flex flex-col items-center">
                     <h3
-                        class="text-xs font-bold text-slate-300 tracking-widest uppercase mb-8 text-center w-full border-b border-slate-800 pb-3">
-                        INCIDENT DISTRIBUTION SPECTRUM</h3>
-                    <div class="relative w-full max-w-[260px] aspect-square flex-1 min-h-0">
-                        <canvas id="analytics-pie-chart"></canvas>
+                        class="text-sm font-semibold text-slate-200 mb-3 w-full border-b border-slate-800 pb-2">
+                        Alert distribution</h3>
+                    <p id="an-empty-chart-note" class="text-xs text-slate-400 text-center py-6">Complete a monitoring session to view alert distribution.</p>
+                    <div class="relative w-full max-w-[220px] h-[210px]">
+                        <canvas id="analytics-pie-chart" role="img" aria-label="Alert distribution for the last completed session. Counts and severity are listed in the adjacent alert summary table."></canvas>
                     </div>
                 </div>
 
                 <!-- Right Column (2/3): Metrics Table -->
-                <div class="col-span-2 bg-slate-900 border border-slate-800 rounded p-6 shadow-sm flex flex-col">
+                <div class="col-span-1 lg:col-span-2 bg-slate-900 border border-slate-800 rounded p-4 shadow-sm flex flex-col">
                     <h3
-                        class="text-xs font-bold text-slate-300 tracking-widest uppercase mb-4 border-b border-slate-800 pb-3">
-                        Quantitative Metrics Mapping</h3>
-                    <div class="overflow-x-auto flex-1 bg-slate-950/50 rounded border border-slate-800">
-                        <table class="w-full text-left text-sm text-slate-400">
+                        class="text-sm font-semibold text-slate-200 mb-3 border-b border-slate-800 pb-2">
+                        Alert summary</h3>
+                    <div class="overflow-x-auto bg-slate-950/50 rounded border border-slate-800">
+                        <table class="w-full text-left text-sm text-slate-200">
                             <thead
-                                class="text-[10px] text-slate-500 uppercase bg-slate-900/80 border-b border-slate-800 font-bold tracking-wider">
+                                class="text-xs text-slate-300 bg-slate-900/90 border-b border-slate-800 font-semibold">
                                 <tr>
-                                    <th class="px-5 py-3">Class Name</th>
-                                    <th class="px-5 py-3 text-center">Events Count</th>
-                                    <th class="px-5 py-3">Severity Level</th>
-                                    <th class="px-5 py-3 text-right">Operational Impact Status</th>
+                                    <th class="px-4 py-2.5">Condition</th>
+                                    <th class="px-4 py-2.5 text-center">Occurrences</th>
+                                    <th class="px-4 py-2.5">Severity</th>
+                                    <th class="px-4 py-2.5 text-right">Summary</th>
                                 </tr>
                             </thead>
                             <tbody id="metrics-table-body" class="divide-y divide-slate-800 font-mono text-xs">
-                                <!-- Populated dynamically by JS -->
+                                <tr>
+                                    <td colspan="4" class="px-4 py-6 text-center text-slate-400 font-sans">
+                                        No completed session yet. Start and stop a monitoring session to view the summary.
+                                    </td>
+                                </tr>
                             </tbody>
                         </table>
                     </div>
@@ -313,25 +351,23 @@
 
 
         <!-- ─────────────── TAB: ALERT CENTER (Step 3) ─────────────── -->
-        <div id="tab-alert-center" class="hidden flex-col flex-1 overflow-y-auto items-center py-2">
+        <div id="tab-alert-center" role="tabpanel" aria-labelledby="tab-btn-alert-center" class="hidden flex-col flex-1 overflow-y-auto items-center py-1">
 
-            <div class="w-full max-w-4xl flex flex-col gap-4 pb-10">
-                <div class="flex items-center justify-between shrink-0 mb-2 border-b border-slate-800 pb-3">
+            <div class="w-full max-w-4xl flex flex-col gap-3 pb-8">
+                <div class="flex items-center justify-between shrink-0 border-b border-slate-800 pb-2.5">
                     <div>
-                        <h2 class="text-sm font-bold text-slate-200 tracking-widest uppercase">Alert Event Log</h2>
-                        <p class="text-xs text-slate-500 mt-1 uppercase tracking-wider font-semibold">All DEGRADED and
-                            CRITICAL events captured during the last session.</p>
+                        <h2 class="text-sm font-semibold text-slate-200">Recorded alerts</h2>
+                        <p class="text-xs text-slate-400 mt-0.5">Alerts from the last completed session, including timestamp, severity, and what to check.</p>
                     </div>
                     <span id="ac-count-badge"
-                        class="rounded px-3 py-1 text-[10px] font-bold font-mono tracking-widest bg-slate-800 text-slate-400 border border-slate-700">
+                        class="rounded px-2.5 py-1 text-xs font-semibold font-mono bg-slate-800 text-slate-200 border border-slate-700">
                         0 ALERTS
                     </span>
                 </div>
 
-                <div id="alert-list-container" class="space-y-4 w-full">
-                    <div class="bg-slate-900 border border-slate-800 rounded p-5 text-center shadow-sm">
-                        <p class="text-slate-500 text-xs font-mono tracking-wider">[INIT] No session completed yet. Run
-                            a monitoring session first.</p>
+                <div id="alert-list-container" class="space-y-2.5 w-full">
+                    <div class="bg-slate-900 border border-slate-800 rounded p-4 text-center shadow-sm">
+                        <p class="text-slate-400 text-xs">No completed session yet. Start and stop a monitoring session to review recorded alerts.</p>
                     </div>
                 </div>
             </div>
@@ -342,8 +378,8 @@
 
     <!-- ═══════════════════════ FOOTER ═══════════════════════ -->
     <footer
-        class="flex items-center justify-between border-t border-slate-800 bg-slate-900/50 px-6 py-2 text-[10px] font-bold tracking-widest uppercase text-slate-600 shrink-0 z-10">
-        <span>AI Network Analyzer &bull; Scapy / RandomForest / LSTM</span>
+        class="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-slate-800 bg-slate-900/60 px-6 py-1.5 text-[11px] font-mono text-slate-400 shrink-0 z-10">
+        <span>AI-Powered Network Performance Analyzer &bull; Scapy / Random Forest / LSTM</span>
         <span id="footer-ts">IDLE</span>
     </footer>
 
@@ -356,8 +392,14 @@
         // ═══════════════════════════════════════════════════════════════════════════
 
         const TAB_IDS = ['live-stream', 'analytics', 'alert-center'];
-        const ACTIVE_CLS = 'tab-btn active bg-slate-800 text-slate-200 border-b-2 border-sky-500 px-4 py-2 text-xs font-bold uppercase tracking-wider transition-colors';
-        const INACTIVE_CLS = 'tab-btn text-slate-500 hover:text-slate-300 hover:bg-slate-800/50 border-b-2 border-transparent px-4 py-2 text-xs font-bold uppercase tracking-wider transition-colors';
+        const ACTIVE_CLS = 'tab-btn active bg-slate-800 text-slate-100 border-b-2 border-sky-500 px-4 py-1.5 text-xs font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400';
+        const INACTIVE_CLS = 'tab-btn text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 border-b-2 border-transparent px-4 py-1.5 text-xs font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400';
+
+        function setAttr(el, name, value) {
+            if (!el) return;
+            if (typeof el.setAttribute === 'function') el.setAttribute(name, value);
+            if (el.attributes) el.attributes[name] = String(value);
+        }
 
         function switchTab(tabId) {
             TAB_IDS.forEach(id => {
@@ -367,10 +409,12 @@
                     panel.classList.remove('hidden');
                     panel.classList.add('flex');
                     btn.className = ACTIVE_CLS;
+                    setAttr(btn, 'aria-selected', 'true');
                 } else {
                     panel.classList.add('hidden');
                     panel.classList.remove('flex');
                     btn.className = INACTIVE_CLS;
+                    setAttr(btn, 'aria-selected', 'false');
                 }
             });
         }
@@ -380,7 +424,7 @@
 
 
         // ═══════════════════════════════════════════════════════════════════════════
-        // 2. CHART.JS — Live line chart
+        // 2. CHART.JS — Live line chart (Measured & Predicted Latency in ms)
         // ═══════════════════════════════════════════════════════════════════════════
 
         const canvasCtx = document.getElementById('consoleChart').getContext('2d');
@@ -389,29 +433,21 @@
             labels: [],
             datasets: [
                 {
-                    label: 'Live Latency (ms)',
+                    label: 'Measured latency (ms)',
                     data: [],
-                    borderColor: '#22d3ee', // cyan-400
-                    backgroundColor: 'rgba(34,211,238,0.1)',
-                    borderWidth: 2, tension: 0.3, fill: true,
+                    borderColor: '#38bdf8',
+                    backgroundColor: 'transparent',
+                    borderWidth: 2, tension: 0.2, fill: false,
                     pointRadius: 0, pointHoverRadius: 4,
                 },
                 {
-                    label: 'LSTM Forecast (ms)',
+                    label: 'Next-step prediction (LSTM, ms)',
                     data: [],
-                    borderColor: '#34d399', // emerald-400
+                    borderColor: '#2dd4bf',
                     backgroundColor: 'transparent',
-                    borderWidth: 2, borderDash: [5, 5], tension: 0.3, fill: false,
+                    borderWidth: 2, borderDash: [5, 4], tension: 0.2, fill: false,
                     pointRadius: 0, pointHoverRadius: 4,
                     spanGaps: false,
-                },
-                {
-                    label: 'Throughput (Mbps)',
-                    data: [],
-                    borderColor: '#818cf8', // indigo-400
-                    backgroundColor: 'transparent',
-                    borderWidth: 2, tension: 0.3, fill: false,
-                    pointRadius: 0, pointHoverRadius: 4,
                 }
             ]
         };
@@ -422,16 +458,18 @@
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                animation: { duration: 300, easing: 'linear' },
+                animation: false,
                 interaction: { mode: 'index', intersect: false },
                 scales: {
                     x: {
-                        grid: { color: 'rgba(30,41,59,0.5)', drawBorder: false },
-                        ticks: { color: '#64748b', font: { size: 10, family: 'monospace' }, maxTicksLimit: 10 }
+                        title: { display: true, text: 'Sample / forecast issue time', color: '#8f9bad', font: { size: 11 } },
+                        grid: { color: 'rgba(31,42,61,0.6)' },
+                        ticks: { color: '#8f9bad', font: { size: 11, family: 'Segoe UI' }, maxTicksLimit: 10 }
                     },
                     y: {
-                        grid: { color: 'rgba(30,41,59,0.5)', drawBorder: false, borderDash: [2, 4] },
-                        ticks: { color: '#64748b', font: { size: 10, family: 'monospace' }, padding: 10 },
+                        title: { display: true, text: 'Latency (ms)', color: '#8f9bad', font: { size: 11 } },
+                        grid: { color: 'rgba(31,42,61,0.6)', borderDash: [2, 4] },
+                        ticks: { color: '#8f9bad', font: { size: 11, family: 'Segoe UI' }, padding: 10 },
                         suggestedMin: 0, suggestedMax: 100
                     }
                 },
@@ -439,18 +477,19 @@
                     legend: {
                         position: 'top',
                         align: 'end',
-                        labels: { color: '#94a3b8', font: { size: 10, family: 'monospace', weight: 'bold' }, boxWidth: 12, padding: 15, usePointStyle: true }
+                        labels: { color: '#b4bdcb', font: { size: 12, weight: '400', family: 'Segoe UI' }, boxWidth: 22, boxHeight: 1, padding: 16 }
                     },
                     tooltip: {
-                        backgroundColor: '#020617', borderColor: '#1e293b', borderWidth: 1,
+                        backgroundColor: '#0b1120', borderColor: '#2b3850', borderWidth: 1,
                         titleColor: '#f8fafc', bodyColor: '#cbd5e1', padding: 12, cornerRadius: 4,
-                        titleFont: { family: 'monospace', size: 11 }, bodyFont: { family: 'monospace', size: 11 }
+                        titleFont: { family: 'Segoe UI', size: 11 }, bodyFont: { family: 'Segoe UI', size: 11 }
                     }
                 }
             }
         });
 
         const MAX_POINTS = 20;
+        const LSTM_WINDOW_STEPS = 10;
 
 
         // ═══════════════════════════════════════════════════════════════════════════
@@ -471,9 +510,15 @@
         function setMetric(id, value, unit, isAlert = false) {
             const el = document.getElementById(id);
             if (!el) return;
-            el.textContent = value + ' ' + unit;
-            el.classList.remove('text-cyan-400', 'text-rose-500', 'text-emerald-400');
-            el.classList.add(isAlert ? 'text-rose-500' : (id === 'm-forecast' ? 'text-emerald-400' : 'text-cyan-400'));
+            setMetricText(el, value + ' ' + unit);
+            el.classList.remove('text-cyan-400', 'text-rose-500', 'text-emerald-400', 'text-slate-500');
+            el.classList.add('text-slate-100');
+        }
+
+        // Preserve the exact accessible reading while giving units a quieter scale.
+        function setMetricText(el, text) {
+            el.replaceChildren(...String(text).split(/(\s*(?:Mbps|ms|%|m|s))(?=\s|$)/g).map((part, index) =>
+                index % 2 ? textElement('small', 'metric-unit', part) : part));
         }
 
         function formatDuration(ms) {
@@ -482,6 +527,31 @@
             const sec = s % 60;
             if (m > 0) return `${m}m ${sec}s`;
             return `${sec}s`;
+        }
+
+        function formatPacketLoss(loss) {
+            return Number.isInteger(loss) ? String(loss) : loss.toFixed(1);
+        }
+
+        function featureUnit(featureName) {
+            const name = String(featureName || '');
+            if (name === 'Flow Duration') return ' µs';
+            if (name === 'Flow Bytes/s') return ' B/s';
+            if (name.endsWith('Packets/s')) return ' pkt/s';
+            if (name.includes('Packet Length')) return ' B';
+            return '';
+        }
+
+        function formatAlertTimestamp(ts) {
+            if (typeof ts !== 'string' || !ts) return '';
+            if (/^\d{4}-\d{2}-\d{2}T/.test(ts)) {
+                const iso = (ts.endsWith('Z') || /[+-]\d{2}:?\d{2}$/.test(ts)) ? ts : ts + 'Z';
+                const parsed = new Date(iso);
+                if (Number.isFinite(parsed.getTime())) {
+                    return parsed.toLocaleTimeString('en-US', { hour12: false });
+                }
+            }
+            return ts;
         }
 
 
@@ -494,9 +564,12 @@
         let latencyArray = [];
         let alertCounts = { latency_delay: 0, packet_loss: 0, anomaly: 0 };
         let sessionAlertsHistory = [];
+        let savedSessionReport = null;
         let activeSessionId = null;
         let activeSessionGeneration = null;
         let processedBatchIds = new Set();
+        // Activity Log is a projection only; alert accounting and saved reports stay independent.
+        let activity = { session: null, conditions: {}, healthy: false, warning: false, availability: null, outageBatch: 0, ended: false };
 
         function resetSessionState() {
             sessionStartTime = null;
@@ -504,7 +577,23 @@
             latencyArray = [];
             alertCounts = { latency_delay: 0, packet_loss: 0, anomaly: 0 };
             sessionAlertsHistory = [];
+            savedSessionReport = null;
             processedBatchIds.clear();
+            lastBatchId = 0;
+            lastSample = null;
+            clearTimeout(freshnessTimer);
+            chartData.labels.length = 0;
+            chartData.datasets.forEach(ds => { ds.data.length = 0; });
+            consoleChart.update();
+            ['m-latency', 'm-forecast', 'm-jitter', 'm-loss', 'm-bandwidth'].forEach(id => {
+                const el = document.getElementById(id);
+                el.textContent = '--';
+                el.classList.remove('text-cyan-400', 'text-rose-500', 'text-emerald-400');
+                el.classList.add('text-slate-500');
+            });
+            const forecastNote = document.getElementById('m-forecast-note');
+            if (forecastNote) forecastNote.textContent = 'Next reading (warms up over 10 samples)';
+            document.getElementById('rf-interpretation-content').textContent = 'Awaiting session telemetry.';
         }
 
 
@@ -515,105 +604,299 @@
         let monitorInterval = null;
         let isMonitoring = false;
         let pieChartRef = null;
+        const POLL_MS = 2000;
+        const REQUEST_TIMEOUT_MS = 8000;
+        // 2s worker sleep + up to 2s probe + measured RF/XAI/LSTM max 2.171s
+        // (12 isolated runs, median 0.414s) + 2s polling + timestamp/scheduling margin.
+        // This is a telemetry freshness allowance, not a network health threshold.
+        const SAMPLE_MAX_AGE_MS = 12000;
+        const HEALTH_STATES = new Set(['OPTIMAL', 'DEGRADED', 'CRITICAL']);
+        let lifecycle = 0;
+        let telemetryRequest = null;
+        let sessionReportRequest = null;
+        let controlPending = false;
+        let needsSessionSync = true;
+        let lastBatchId = 0;
+        let lastSample = null;
+        let freshnessTimer = null;
+        let visibilityRefreshRequest = null;
 
-        // Initialize state from backend on load
-        fetch('/api/telemetry')
-            .then(r => r.json())
-            .then(data => {
-                if (data.is_monitoring === true) {
-                    isMonitoring = true;
-                    activeSessionId = data.session_id;
-                    activeSessionGeneration = data.session_generation;
-                    resetSessionState(); // Clear local stats properly
+        function isDashboardHidden() {
+            return document.visibilityState === 'hidden' || document.hidden === true;
+        }
 
-                    document.getElementById('monitor-btn').textContent = 'Stop Monitoring Session';
-                    document.getElementById('monitor-btn').className = document.getElementById('monitor-btn').className
-                        .replace('bg-sky-600', 'bg-rose-600')
-                        .replace('hover:bg-sky-500', 'hover:bg-rose-500')
-                        .replace('shadow-[0_0_15px_rgba(2,132,199,0.3)]', 'shadow-[0_0_15px_rgba(225,29,72,0.3)]')
-                        .replace('border-sky-400/20', 'border-rose-400/20');
-                    monitorInterval = setInterval(streamTelemetry, 2000);
+        function setText(id, text) {
+            const el = document.getElementById(id);
+            if (el && el.textContent !== text) el.textContent = text;
+        }
+
+        // Backend strings are always text, never HTML. Styling comes from local callers.
+        function textElement(tag, className, text = '') {
+            const el = document.createElement(tag);
+            el.className = className;
+            el.textContent = text;
+            return el;
+        }
+
+        function showAvailability(label, explanation, stream = 'UNAVAILABLE') {
+            recordActivityAvailability(label);
+            clearTimeout(freshnessTimer);
+            document.getElementById('network-health').dataset.state = 'UNAVAILABLE';
+            setText('health-state', label);
+            setText('health-explanation', explanation);
+            setText('stream-status', `TELEMETRY: ${stream}`);
+            setText('metrics-status', lastSample ? 'METRICS: LAST RECORDED (NOT LIVE)' : 'METRICS: AWAITING TELEMETRY');
+            const sampleTime = lastSample ? new Date(lastSample.timestamp * 1000).toISOString() : 'NONE';
+            setText('footer-ts', `LAST SAMPLE: ${sampleTime} // ${label.toUpperCase()}`);
+        }
+
+        function summarizeHealthExplanation(sample) {
+            const raw = typeof sample.diagnostic === 'string' ? sample.diagnostic.replace(/^\[[^\]]+\]\s*/, '').trim() : '';
+            const lower = raw.toLowerCase();
+            const metrics = sample.metrics || {};
+            const latRaw = metrics.latency ?? metrics.latency_ms ?? null;
+            const lossRaw = metrics.packet_loss ?? metrics.packet_loss_pct ?? null;
+            const latency = (latRaw !== null && latRaw !== undefined) ? safeNum(latRaw, NaN) : NaN;
+            const loss = (lossRaw !== null && lossRaw !== undefined) ? safeNum(lossRaw, NaN) : NaN;
+
+            if (sample.system_state === 'OPTIMAL') {
+                if (!raw || lower.includes('normal') || lower.includes('within')) {
+                    return 'Latest readings are within the configured limits.';
                 }
-            })
-            .catch(e => console.error(e));
+                return raw;
+            }
+            if (sample.system_state === 'CRITICAL') {
+                if (lower.includes('abnormal') || lower.includes('unusual traffic') || lower.includes('random forest')) {
+                    return 'Unusual traffic flagged. Review the activity log.';
+                }
+                return raw || 'Critical condition flagged. Review the activity log.';
+            }
+            if (sample.system_state === 'DEGRADED') {
+                const hasLatency = lower.includes('exceeded') && lower.includes('latency')
+                    || lower.includes('network delay')
+                    || lower.includes('high latency')
+                    || (Number.isFinite(latency) && latency > 80.0);
+                const hasLoss = lower.includes('packet loss')
+                    || lower.includes('icmp probe')
+                    || lower.includes('failed icmp')
+                    || (Number.isFinite(loss) && loss > 2.0);
+                if (hasLatency && hasLoss) {
+                    return 'High latency and failed ICMP probes detected.';
+                }
+                if (hasLatency) {
+                    return 'High latency detected (>80 ms).';
+                }
+                if (hasLoss) {
+                    return 'Failed ICMP probes detected (>2% loss).';
+                }
+                return raw || 'Performance threshold exceeded.';
+            }
+            return raw || 'No diagnostic supplied by the backend.';
+        }
 
-        function toggleMonitoring() {
+        function renderHealth() {
+            const sample = lastSample;
+            const age = sample ? Date.now() - sample.timestamp * 1000 : Infinity;
+            const refreshingVisibility = Boolean(visibilityRefreshRequest && telemetryRequest === visibilityRefreshRequest);
+            if (!sample || age < -1000 || age >= SAMPLE_MAX_AGE_MS) {
+                if (refreshingVisibility || (isMonitoring && isDashboardHidden())) {
+                    showAvailability('Checking telemetry', 'Checking for the latest sample.', 'CHECKING');
+                    return;
+                }
+                showAvailability('Telemetry stale', 'Current readings are outdated. Waiting for a new sample.', 'STALE');
+                return;
+            }
+            if (!HEALTH_STATES.has(sample.system_state)) {
+                showAvailability('Health unavailable', 'Current health status could not be determined.', 'RESPONDING');
+                return;
+            }
+            document.getElementById('network-health').dataset.state = sample.system_state;
+            setText('health-state', sample.system_state);
+            setText('health-explanation', summarizeHealthExplanation(sample));
+            setText('stream-status', 'TELEMETRY: RESPONDING');
+            setText('metrics-status', 'METRICS: CURRENT SAMPLE');
+            setText('footer-ts', `LAST SAMPLE: ${new Date(sample.timestamp * 1000).toISOString()} // STATE: ${sample.system_state}`);
+            clearTimeout(freshnessTimer);
+            if (!isDashboardHidden()) {
+                freshnessTimer = setTimeout(renderHealth, SAMPLE_MAX_AGE_MS - age);
+            }
+        }
+
+        // The timeout covers both response headers and JSON body consumption.
+        async function fetchJSON(url, options, controller) {
+            let timeout;
+            let onAbort;
+            const cancelled = new Promise((resolve, reject) => {
+                onAbort = () => reject(new Error('Request cancelled or timed out'));
+                controller.signal.addEventListener('abort', onAbort, { once: true });
+                timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+            });
+            try {
+                return await Promise.race([
+                    fetch(url, { cache: 'no-store', ...options, signal: controller.signal }).then(r => {
+                        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                        return r.json();
+                    }),
+                    cancelled
+                ]);
+            } finally {
+                clearTimeout(timeout);
+                controller.signal.removeEventListener('abort', onAbort);
+            }
+        }
+
+        function startPolling() {
+            if (monitorInterval === null) monitorInterval = setInterval(streamTelemetry, POLL_MS);
+        }
+
+        function cancelPolling() {
+            lifecycle++;
+            clearInterval(monitorInterval);
+            monitorInterval = null;
+            clearTimeout(freshnessTimer);
+            if (telemetryRequest) telemetryRequest.controller.abort();
+            telemetryRequest = null;
+            visibilityRefreshRequest = null;
+            if (sessionReportRequest) sessionReportRequest.controller.abort();
+            sessionReportRequest = null;
+        }
+
+        function updateMonitorButton() {
             const btn = document.getElementById('monitor-btn');
-            btn.disabled = true; // disable until response
+            btn.textContent = isMonitoring ? 'Stop Monitoring Session' : 'Start Monitoring Session';
+            const from = isMonitoring ? 'sky' : 'rose';
+            const to = isMonitoring ? 'rose' : 'sky';
+            btn.className = btn.className.replace(`bg-${from}-600`, `bg-${to}-600`)
+                .replace(`hover:bg-${from}-500`, `hover:bg-${to}-500`)
+                .replace(`border-${from}-400/30`, `border-${to}-400/30`);
+        }
 
-            if (!isMonitoring) {
-                // ── START ─────────────────────────────────────────────────────────
-                fetch('/api/control', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({action: 'start'})
-                })
-                .then(r => { if (!r.ok) throw new Error("Backend start failed"); return r.json(); })
-                .then(res => {
-                    btn.disabled = false;
-                    if (res.status === 'success' && res.is_monitoring === true && res.session_id !== null && res.session_id !== undefined) {
-                        isMonitoring = true;
-                        activeSessionId = res.session_id;
-                        activeSessionGeneration = res.session_generation !== undefined ? res.session_generation : null;
-                        resetSessionState();
-                        sessionStartTime = Date.now();
+        function adoptSession(data, startConfirmed = false) {
+            if (data.session_id !== activeSessionId || data.session_generation !== activeSessionGeneration) {
+                resetSessionState();
+                activeSessionId = data.session_id;
+                activeSessionGeneration = data.session_generation;
+            }
+            beginActivitySession(data, startConfirmed);
+            isMonitoring = true;
+            updateMonitorButton();
+        }
 
-                        btn.textContent = 'Stop Monitoring Session';
-                        btn.className = btn.className
-                            .replace('bg-sky-600', 'bg-rose-600')
-                            .replace('hover:bg-sky-500', 'hover:bg-rose-500')
-                            .replace('shadow-[0_0_15px_rgba(2,132,199,0.3)]', 'shadow-[0_0_15px_rgba(225,29,72,0.3)]')
-                            .replace('border-sky-400/20', 'border-rose-400/20');
+        function monitoringStopped() {
+            const wasMonitoring = isMonitoring;
+            cancelPolling();
+            needsSessionSync = false;
+            isMonitoring = false;
+            activeSessionId = null;
+            activeSessionGeneration = null;
+            updateMonitorButton();
+            showAvailability('Monitoring stopped', 'Start a session to monitor live readings.', 'STOPPED');
+            if (wasMonitoring) {
+                activity.ended = true;
+                appendLog('text-slate-400', '', 'Monitoring session ended (service confirmation).', '');
+                buildAnalyticsTab();
+                buildAlertCenter();
+            }
+        }
 
-                        appendLog('text-slate-500', 'text-slate-600', '[SESSION] Monitoring session started.', '');
+        const DEFAULT_FIX_BY_TYPE = {
+            AI_ANOMALY: 'Review active applications and large downloads on this host. If unusual classifications continue, inspect local firewall and router logs.',
+            HIGH_LATENCY: 'Check for bandwidth-heavy downloads, video streams, or background transfers on the local network and apply traffic shaping if needed.',
+            PACKET_LOSS: 'Check Wi-Fi signal quality, Ethernet cables, and local router or ISP link stability.'
+        };
 
-                        switchTab('live-stream');
-                        streamTelemetry();
-                        if (monitorInterval) clearInterval(monitorInterval);
-                        monitorInterval = setInterval(streamTelemetry, 2000);
-                    }
-                })
-                .catch(err => {
-                    btn.disabled = false;
-                    console.error("Start failed:", err);
-                    appendLog('text-rose-500', 'text-rose-600', '[ERROR] Failed to start monitoring session.', '');
+        function applySavedSessionReport(details) {
+            if (!details || typeof details !== 'object') return;
+            const summary = details.report || details.session;
+            if (summary && typeof summary === 'object') {
+                if (Number.isFinite(summary.ai_anomalies)) alertCounts.anomaly = summary.ai_anomalies;
+                if (Number.isFinite(summary.latency_delay_events)) alertCounts.latency_delay = summary.latency_delay_events;
+                if (Number.isFinite(summary.packet_loss_events)) alertCounts.packet_loss = summary.packet_loss_events;
+                if (Number.isFinite(summary.total_triggers)) {
+                    totalAlerts = summary.total_triggers;
+                } else {
+                    totalAlerts = alertCounts.anomaly + alertCounts.latency_delay + alertCounts.packet_loss;
+                }
+                savedSessionReport = {
+                    durationSeconds: Number.isFinite(summary.duration_seconds) ? summary.duration_seconds : null,
+                    meanLatencyMs: Number.isFinite(summary.mean_latency_ms) ? summary.mean_latency_ms : null
+                };
+            }
+            if (Array.isArray(details.alerts)) {
+                const previousHistory = sessionAlertsHistory.slice();
+                sessionAlertsHistory = details.alerts.map(a => {
+                    const matched = previousHistory.find(h => h.diagnostic === a.diagnostic && h.fix);
+                    return {
+                        timestamp: formatAlertTimestamp(a.timestamp),
+                        state: a.severity === 'CRITICAL' ? 'CRITICAL' : 'DEGRADED',
+                        diagnostic: typeof a.diagnostic === 'string' ? a.diagnostic : '',
+                        fix: a.recommended_fix || (matched ? matched.fix : (DEFAULT_FIX_BY_TYPE[a.alert_type] || ''))
+                    };
                 });
+            }
+            buildAnalyticsTab();
+            buildAlertCenter();
+            reconcileActivityLog(details);
+        }
 
-            } else {
-                // ── STOP ──────────────────────────────────────────────────────────
-                fetch('/api/control', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({action: 'stop'})
-                })
-                .then(r => { if (!r.ok) throw new Error("Backend stop failed"); return r.json(); })
-                .then(res => {
-                    btn.disabled = false;
-                    if (res.status === 'success' && res.is_monitoring === false) {
-                        isMonitoring = false;
-                        if (monitorInterval) clearInterval(monitorInterval);
-                        monitorInterval = null;
+        async function loadSavedSessionReport(sessionId) {
+            if (!Number.isInteger(sessionId)) return;
+            const request = { controller: new AbortController(), lifecycle };
+            sessionReportRequest = request;
+            try {
+                const res = await fetchJSON(`/api/session/${sessionId}`, {}, request.controller);
+                if (request.lifecycle !== lifecycle || sessionReportRequest !== request || isMonitoring) return;
+                if (res && res.status === 'success' && res.data) {
+                    applySavedSessionReport(res.data);
+                }
+            } catch (err) {
+                // Keep the already-rendered client-side report if the saved-session lookup fails.
+            } finally {
+                if (sessionReportRequest === request) sessionReportRequest = null;
+            }
+        }
 
-                        btn.textContent = 'Start Monitoring Session';
-                        btn.className = btn.className
-                            .replace('bg-rose-600', 'bg-sky-600')
-                            .replace('hover:bg-rose-500', 'hover:bg-sky-500')
-                            .replace('shadow-[0_0_15px_rgba(225,29,72,0.3)]', 'shadow-[0_0_15px_rgba(2,132,199,0.3)]')
-                            .replace('border-rose-400/20', 'border-sky-400/20');
-
-                        appendLog('text-slate-500', 'text-slate-600', '[SESSION] Monitoring session paused.', '');
-
-                        // Route user straight to analytics (Step 4.2)
-                        buildAnalyticsTab();
-                        buildAlertCenter();
-                        switchTab('analytics');
+        async function toggleMonitoring() {
+            if (controlPending) return;
+            const action = isMonitoring ? 'stop' : 'start';
+            const btn = document.getElementById('monitor-btn');
+            controlPending = true;
+            btn.disabled = true;
+            cancelPolling();
+            showAvailability(action === 'start' ? 'Starting monitoring' : 'Stopping monitoring', 'Waiting for service confirmation.', 'PENDING');
+            try {
+                const res = await fetchJSON('/api/control', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action })
+                }, new AbortController());
+                if (res.status !== 'success' || res.is_monitoring !== (action === 'start')) throw new Error('Unexpected control response');
+                if (action === 'start') {
+                    if (!Number.isInteger(res.session_id) || !Number.isInteger(res.session_generation)) throw new Error('Missing session identity');
+                    adoptSession(res, true);
+                    needsSessionSync = false;
+                    sessionStartTime = Date.now();
+                    showAvailability('Awaiting telemetry', 'Collecting the first sample for this session.', 'WAITING');
+                    switchTab('live-stream');
+                } else {
+                    monitoringStopped();
+                    switchTab('analytics');
+                    if (Number.isInteger(res.session_id)) {
+                        await loadSavedSessionReport(res.session_id);
                     }
-                })
-                .catch(err => {
-                    btn.disabled = false;
-                    console.error("Stop failed:", err);
-                    appendLog('text-rose-500', 'text-rose-600', '[ERROR] Failed to stop monitoring session.', '');
-                });
+                }
+            } catch (err) {
+                // A timed-out POST may have succeeded server-side. Reconcile with GET;
+                // never automatically repeat a control operation.
+                needsSessionSync = true;
+                showAvailability('Telemetry unavailable', 'Current readings are unavailable. Reconnecting.');
+                appendLog('text-amber-400', '', `The monitoring ${action} request could not be confirmed. Checking service status.`, '');
+            } finally {
+                controlPending = false;
+                btn.disabled = false;
+                if (isMonitoring || needsSessionSync) {
+                    startPolling();
+                    streamTelemetry();
+                }
             }
         }
 
@@ -623,16 +906,23 @@
         // ═══════════════════════════════════════════════════════════════════════════
 
         function buildAnalyticsTab() {
-            const durationMs = sessionStartTime ? (Date.now() - sessionStartTime) : 0;
-            const avgLatency = latencyArray.length > 0
-                ? (latencyArray.reduce((a, b) => a + b, 0) / latencyArray.length).toFixed(1) + ' ms'
-                : 'N/A';
+            const durationMs = (savedSessionReport && savedSessionReport.durationSeconds !== null)
+                ? Math.round(savedSessionReport.durationSeconds * 1000)
+                : (sessionStartTime ? (Date.now() - sessionStartTime) : 0);
+            const avgLatency = (savedSessionReport && savedSessionReport.meanLatencyMs !== null)
+                ? savedSessionReport.meanLatencyMs.toFixed(1) + ' ms'
+                : (latencyArray.length > 0
+                    ? (latencyArray.reduce((a, b) => a + b, 0) / latencyArray.length).toFixed(1) + ' ms'
+                    : 'N/A');
 
             // Summary cards
-            document.getElementById('an-duration').textContent = formatDuration(durationMs);
+            setMetricText(document.getElementById('an-duration'), formatDuration(durationMs));
             document.getElementById('an-total-alerts').textContent = totalAlerts;
             document.getElementById('an-anomalies').textContent = alertCounts.anomaly;
-            document.getElementById('an-avg-latency').textContent = avgLatency;
+            setMetricText(document.getElementById('an-avg-latency'), avgLatency);
+
+            const emptyNote = document.getElementById('an-empty-chart-note');
+            if (emptyNote) emptyNote.classList.add('hidden');
 
             // Destroy old pie chart
             if (pieChartRef) { pieChartRef.destroy(); pieChartRef = null; }
@@ -644,27 +934,27 @@
             pieChartRef = new Chart(pieCtx, {
                 type: 'doughnut',
                 data: {
-                    labels: ['AI Anomaly', 'Latency Delay', 'Packet Loss'],
+                    labels: ['Unusual traffic (RF)', 'High latency (>80 ms)', 'Failed ICMP probes (>2%)'],
                     datasets: [{
                         data: totalTypes > 0 ? [alertCounts.anomaly, alertCounts.latency_delay, alertCounts.packet_loss] : [1, 0, 0],
-                        backgroundColor: totalTypes > 0 ? ['#f43f5e', '#f59e0b', '#f97316'] : ['#1e293b', '#1e293b', '#1e293b'],
-                        borderColor: '#0f172a',
-                        borderWidth: 4,
+                        backgroundColor: totalTypes > 0 ? ['#f87171', '#fbbf24', '#fb923c'] : ['#1f2a3d', '#1f2a3d', '#1f2a3d'],
+                        borderColor: '#111827',
+                        borderWidth: 3,
                         hoverOffset: 4
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    cutout: '75%',
+                    animation: false,
+                    cutout: '65%',
                     plugins: {
                         legend: {
                             position: 'bottom',
-                            labels: { color: '#94a3b8', font: { size: 10, family: 'monospace' }, usePointStyle: true, padding: 20 }
+                            labels: { color: '#b4bdcb', font: { size: 11, family: 'Segoe UI' }, usePointStyle: true, padding: 12 }
                         },
                         tooltip: {
-                            backgroundColor: '#020617', borderColor: '#1e293b', borderWidth: 1,
-                            titleFont: { family: 'monospace' }, bodyFont: { family: 'monospace' },
+                            backgroundColor: '#0b1120', borderColor: '#2b3850', borderWidth: 1,
                             callbacks: {
                                 label: ctx => {
                                     if (!totalTypes) return ' No alerts recorded';
@@ -679,23 +969,23 @@
             // Metrics Table Build (Right Column 2/3)
             const tableBody = document.getElementById('metrics-table-body');
             tableBody.innerHTML = `
-                <tr class="hover:bg-slate-800/30 transition-colors">
-                    <td class="px-5 py-3 text-rose-400 font-semibold">AI Anomaly</td>
-                    <td class="px-5 py-3 text-center text-slate-300">${alertCounts.anomaly}</td>
-                    <td class="px-5 py-3"><span class="px-2 py-1 rounded text-[10px] uppercase font-bold tracking-wider ${alertCounts.anomaly > 0 ? 'bg-rose-500/10 text-rose-400 border border-rose-500/30' : 'bg-slate-800 text-slate-500'}">CRITICAL</span></td>
-                    <td class="px-5 py-3 text-right ${alertCounts.anomaly > 0 ? 'text-rose-500' : 'text-slate-500'}">${alertCounts.anomaly > 0 ? 'Breached' : 'Nominal'}</td>
+                <tr class="border-b border-slate-800/60">
+                    <td class="px-4 py-3 text-rose-400 font-semibold font-sans">Unusual traffic (Random Forest)</td>
+                    <td class="px-4 py-3 text-center text-slate-200 font-semibold">${alertCounts.anomaly}</td>
+                    <td class="px-4 py-3"><span class="px-2 py-0.5 rounded text-[11px] font-semibold ${alertCounts.anomaly > 0 ? 'bg-rose-500/10 text-rose-400 border border-rose-500/30' : 'bg-slate-800 text-slate-400'}">CRITICAL</span></td>
+                    <td class="px-4 py-3 text-right font-sans ${alertCounts.anomaly > 0 ? 'text-rose-400 font-medium' : 'text-slate-400'}">${alertCounts.anomaly > 0 ? 'Flagged for review' : 'Within configured limits'}</td>
                 </tr>
-                <tr class="hover:bg-slate-800/30 transition-colors">
-                    <td class="px-5 py-3 text-amber-400 font-semibold">High Latency Delay</td>
-                    <td class="px-5 py-3 text-center text-slate-300">${alertCounts.latency_delay}</td>
-                    <td class="px-5 py-3"><span class="px-2 py-1 rounded text-[10px] uppercase font-bold tracking-wider ${alertCounts.latency_delay > 0 ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30' : 'bg-slate-800 text-slate-500'}">DEGRADED</span></td>
-                    <td class="px-5 py-3 text-right ${alertCounts.latency_delay > 0 ? 'text-amber-500' : 'text-slate-500'}">${alertCounts.latency_delay > 0 ? 'Delayed' : 'Nominal'}</td>
+                <tr class="border-b border-slate-800/60">
+                    <td class="px-4 py-3 text-amber-400 font-semibold font-sans">High latency (&gt;80 ms)</td>
+                    <td class="px-4 py-3 text-center text-slate-200 font-semibold">${alertCounts.latency_delay}</td>
+                    <td class="px-4 py-3"><span class="px-2 py-0.5 rounded text-[11px] font-semibold ${alertCounts.latency_delay > 0 ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30' : 'bg-slate-800 text-slate-400'}">DEGRADED</span></td>
+                    <td class="px-4 py-3 text-right font-sans ${alertCounts.latency_delay > 0 ? 'text-amber-400 font-medium' : 'text-slate-400'}">${alertCounts.latency_delay > 0 ? 'Exceeded 80 ms limit' : 'Within configured limits'}</td>
                 </tr>
-                <tr class="hover:bg-slate-800/30 transition-colors">
-                    <td class="px-5 py-3 text-orange-400 font-semibold">Packet Loss</td>
-                    <td class="px-5 py-3 text-center text-slate-300">${alertCounts.packet_loss}</td>
-                    <td class="px-5 py-3"><span class="px-2 py-1 rounded text-[10px] uppercase font-bold tracking-wider ${alertCounts.packet_loss > 0 ? 'bg-orange-500/10 text-orange-400 border border-orange-500/30' : 'bg-slate-800 text-slate-500'}">DEGRADED</span></td>
-                    <td class="px-5 py-3 text-right ${alertCounts.packet_loss > 0 ? 'text-orange-500' : 'text-slate-500'}">${alertCounts.packet_loss > 0 ? 'Saturated' : 'Nominal'}</td>
+                <tr>
+                    <td class="px-4 py-3 text-orange-400 font-semibold font-sans">Failed ICMP probes (&gt;2% loss)</td>
+                    <td class="px-4 py-3 text-center text-slate-200 font-semibold">${alertCounts.packet_loss}</td>
+                    <td class="px-4 py-3"><span class="px-2 py-0.5 rounded text-[11px] font-semibold ${alertCounts.packet_loss > 0 ? 'bg-orange-500/10 text-orange-400 border border-orange-500/30' : 'bg-slate-800 text-slate-400'}">DEGRADED</span></td>
+                    <td class="px-4 py-3 text-right font-sans ${alertCounts.packet_loss > 0 ? 'text-orange-400 font-medium' : 'text-slate-400'}">${alertCounts.packet_loss > 0 ? 'Exceeded 2% probe loss' : 'Within configured limits'}</td>
                 </tr>
             `;
         }
@@ -709,31 +999,41 @@
 
             if (sessionAlertsHistory.length === 0) {
                 container.innerHTML = `
-                    <div class="bg-slate-900 border border-slate-800 rounded p-6 text-center shadow-sm">
-                        <p class="text-slate-500 text-xs font-mono tracking-wider">[INFO] No anomalies detected during the session.</p>
+                    <div class="bg-slate-900 border border-slate-800 rounded p-5 text-center shadow-sm">
+                        <p class="text-slate-400 text-xs">No performance or traffic alerts were recorded during this session.</p>
                     </div>`;
                 return;
             }
 
-            // Step 3.2 & 3.3
+            const seenFixes = new Set();
             sessionAlertsHistory.forEach(alert => {
                 const isCritical = alert.state === 'CRITICAL';
-
-                // Solid 4px left accent border
                 const borderCls = isCritical ? 'border-l-rose-500' : 'border-l-amber-500';
                 const tagCls = isCritical ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' : 'bg-amber-500/10 text-amber-400 border-amber-500/20';
 
                 const card = document.createElement('div');
-                card.className = `bg-slate-900 border border-slate-800 border-l-[4px] ${borderCls} rounded p-5 shadow-sm flex flex-col gap-3 hover:bg-slate-800/50 transition-colors`;
+                card.className = `bg-slate-900 border border-slate-800 border-l-[3px] ${borderCls} rounded px-4 py-2.5 shadow-sm flex flex-col gap-1.5`;
 
-                card.innerHTML = `
-                    <div class="flex items-center justify-between">
-                        <div class="font-mono text-[10px] text-slate-500 tracking-widest font-bold">${alert.timestamp}</div>
-                        <span class="px-2 py-0.5 rounded border ${tagCls} text-[9px] font-bold uppercase tracking-widest">${alert.state}</span>
-                    </div>
-                    <div class="text-sm text-slate-200 font-medium leading-relaxed">${alert.diagnostic}</div>
-                    ${alert.fix ? `<div class="mt-1 bg-slate-950/50 rounded p-3 text-sky-400 text-xs font-mono border border-sky-900/30 leading-relaxed shadow-inner"><span class="font-bold text-sky-500 uppercase tracking-widest text-[10px] block mb-1">Recommended Resolution Strategy</span>${alert.fix}</div>` : ''}
-                `;
+                const heading = textElement('div', 'flex items-center justify-between gap-2');
+                heading.append(
+                    textElement('time', 'text-[11px] text-slate-400', alert.timestamp),
+                    textElement('span', `px-2 py-0.5 rounded border ${tagCls} text-[10px] font-semibold`, alert.state)
+                );
+                const cleanDiag = typeof alert.diagnostic === 'string' ? alert.diagnostic.replace(/^\[[^\]]+\]\s*/, '') : '';
+                card.append(heading, textElement('div', 'text-xs sm:text-sm text-slate-200 leading-snug', cleanDiag));
+                if (alert.fix) {
+                    const cleanFix = String(alert.fix).replace(/^(?:Suggested|Recommended)\s+check:\s*/i, '');
+                    const details = textElement('details', 'mt-0.5 text-xs');
+                    if (!seenFixes.has(cleanFix)) {
+                        seenFixes.add(cleanFix);
+                        details.open = true;
+                        setAttr(details, 'open', 'open');
+                    }
+                    const summary = textElement('summary', 'cursor-pointer text-sky-400 hover:text-sky-300 text-[11px] font-medium select-none', 'What to check');
+                    const fixBody = textElement('div', 'mt-1 pl-3 border-l-2 border-slate-700 text-slate-300 font-sans text-xs leading-relaxed', cleanFix);
+                    details.append(summary, fixBody);
+                    card.append(details);
+                }
                 container.appendChild(card);
             });
         }
@@ -743,21 +1043,178 @@
         // 7. CONSOLE LOG BUILDER (Step 1.4)
         // ═══════════════════════════════════════════════════════════════════════════
 
-        function appendLog(rowColor, tsColor, diagnostic, recommendedFix) {
+        function beginActivitySession(data, startConfirmed) {
+            const session = `${data.session_id}:${data.session_generation}`;
+            const newSession = activity.session !== session;
+            if (newSession) {
+                activity = { session, conditions: {}, healthy: false, warning: false, availability: null, outageBatch: 0, ended: false };
+                document.getElementById('console-logs').replaceChildren();
+            }
+            if (newSession || activity.ended) {
+                appendLog('text-slate-400', '', startConfirmed
+                    ? 'Monitoring session started (service confirmation).'
+                    : 'Monitoring session active (service confirmation).', '');
+                activity.ended = false;
+            }
+        }
+
+        function recordActivityAvailability(label) {
+            const messages = {
+                'Telemetry stale': 'Telemetry is stale. Current network conditions cannot be verified.',
+                'Telemetry unavailable': 'Telemetry is unavailable. Current network conditions cannot be verified.',
+                'Health unavailable': 'Network health is unavailable. Waiting for a valid status.',
+                'Sample unavailable': 'The telemetry timestamp is invalid. Waiting for a valid sample.',
+                'Session changed': 'The monitoring session changed. Waiting for service confirmation.'
+            };
+            if (!Object.hasOwn(messages, label)) return;
+            activity.outageBatch = Math.max(activity.outageBatch, lastBatchId);
+            if (activity.availability === label) return;
+            activity.availability = label;
+            appendLog('text-amber-400', '', messages[label], '');
+        }
+
+        function recordActivityTelemetry(data) {
+            const age = Date.now() - data.timestamp * 1000;
+            if (!isMonitoring || activity.session !== `${data.session_id}:${data.session_generation}` ||
+                !HEALTH_STATES.has(data.system_state) || age < -1000 || age >= SAMPLE_MAX_AGE_MS) return;
+            // A duplicate response after an outage does not prove that sampling resumed.
+            if (activity.availability && data.batch_id <= activity.outageBatch) return;
+            if (activity.availability) {
+                appendLog('text-slate-400', '', 'Telemetry resumed with a new sample.', '', data.timestamp);
+                activity.availability = null;
+            }
+            projectActivityConditions(data, activity, (color, unused, message, fix, timestamp) =>
+                appendLog(color, unused, message, fix, timestamp, 'condition'));
+        }
+
+        // Shared event projection for live observations and authoritative saved history.
+        // Freshness checks belong to the live path; archived readings never become live.
+        function projectActivityConditions(data, tracking, emit) {
+            const metrics = data.metrics || {};
+            const classification = data.classification ?? data.predictions?.classification;
+            const latency = metrics.latency ?? metrics.latency_ms;
+            const loss = metrics.packet_loss ?? metrics.packet_loss_pct;
+            const state = data.system_state;
+            // Use the backend's existing conditions (app.py:evaluate_health). Missing,
+            // non-numeric or contradictory evidence is unknown, never a recovery.
+            const measuredCondition = (value, limit) => !Number.isFinite(value) || value < 0 ? null
+                : value > limit ? (state === 'OPTIMAL' ? null : true) : false;
+            const current = {
+                AI_ANOMALY: state === 'CRITICAL' ? true : classification === 'Normal' ? false
+                    : classification === 'Abnormal' && state !== 'OPTIMAL' ? true : null,
+                HIGH_LATENCY: measuredCondition(latency, 80.0),
+                PACKET_LOSS: measuredCondition(loss, 2.0)
+            };
+            const savedAlerts = Array.isArray(data.alerts) ? data.alerts : [];
+            for (const type of Object.keys(current)) {
+                if (savedAlerts.some(alert => alert.alert_type === type)) current[type] = true;
+            }
+            const allClear = state === 'OPTIMAL' && Object.values(current).every(value => value === false);
+            const unresolved = Object.keys(current).some(type => current[type] === null && tracking.conditions[type] === true);
+            current.BACKEND = state !== 'OPTIMAL' && !Object.values(current).includes(true) && !unresolved ? true : allClear ? false : null;
+            const primary = Object.keys(current).find(key => current[key] === true);
+            const descriptions = {
+                AI_ANOMALY: 'The traffic classifier flagged unusual tracking.',
+                HIGH_LATENCY: `Round-trip latency exceeded the configured limit (${latency} ms).`,
+                PACKET_LOSS: `Failed ICMP probes exceeded the configured limit (${loss}% loss).`,
+                BACKEND: 'The service reported a network warning.'
+            };
+            const resolved = {
+                AI_ANOMALY: 'Traffic classification has returned to normal.',
+                HIGH_LATENCY: 'Latency has returned within the configured limit.',
+                PACKET_LOSS: 'ICMP probe loss has returned within the configured limit.'
+            };
+            const recovery = allClear && tracking.warning;
+            for (const [type, active] of Object.entries(current)) {
+                if (active === null) continue;
+                if (active && tracking.conditions[type] !== true) {
+                    const savedAlert = savedAlerts.find(alert => alert.alert_type === type);
+                    const diagnostic = typeof savedAlert?.diagnostic === 'string' ? savedAlert.diagnostic
+                        : type === primary && typeof data.diagnostic === 'string' && data.diagnostic ? data.diagnostic : descriptions[type];
+                    const fix = typeof savedAlert?.recommended_fix === 'string' ? savedAlert.recommended_fix
+                        : type === primary && typeof data.recommended_fix === 'string' ? data.recommended_fix : DEFAULT_FIX_BY_TYPE[type] || '';
+                    emit(type === 'AI_ANOMALY' ? 'text-rose-400' : 'text-amber-400', '', diagnostic, fix, data.timestamp);
+                    tracking.warning = true;
+                } else if (!active && tracking.conditions[type] === true && !recovery && resolved[type]) {
+                    emit('text-slate-400', '', resolved[type], '', data.timestamp);
+                }
+                tracking.conditions[type] = active;
+            }
+            if (allClear && (!tracking.healthy || recovery)) {
+                emit('text-emerald-400', '', recovery
+                    ? 'Network conditions have returned to the configured limits.'
+                    : data.diagnostic || 'Network conditions are within the configured limits.', '', data.timestamp);
+                tracking.healthy = true;
+                tracking.warning = false;
+            }
+        }
+
+        function reconcileActivityLog(details) {
+            const session = details.session;
+            if (isMonitoring || !activity.ended || !session || session.status !== 'completed' ||
+                String(session.id) !== activity.session?.split(':')[0] ||
+                !Array.isArray(details.activity_samples) ||
+                details.activity_samples.length !== details.telemetry_count) return;
+
+            const events = [];
+            const tracking = { conditions: {}, healthy: false, warning: false };
+            let previousBatch = 0;
+            let previousTime = -Infinity;
+            for (const row of details.activity_samples) {
+                if (row.session_id !== session.id || !Number.isSafeInteger(row.batch_id) ||
+                    row.batch_id <= previousBatch || typeof row.timestamp !== 'string') return;
+                const iso = /(?:Z|[+-]\d{2}:?\d{2})$/.test(row.timestamp) ? row.timestamp : row.timestamp + 'Z';
+                const timestamp = Date.parse(iso) / 1000;
+                if (!Number.isFinite(timestamp) || timestamp < previousTime) return;
+                previousBatch = row.batch_id;
+                previousTime = timestamp;
+                if (!HEALTH_STATES.has(row.system_state)) continue;
+                projectActivityConditions({
+                    timestamp, system_state: row.system_state, classification: row.rf_classification,
+                    metrics: { latency: row.latency_ms, packet_loss: row.packet_loss_pct },
+                    diagnostic: row.diagnostic, recommended_fix: row.recommended_fix,
+                    alerts: (details.alerts || []).filter(alert => alert.batch_id === row.batch_id)
+                }, tracking, (...event) => events.push(event));
+            }
+            // Replace only condition events, preserving browser interruptions and lifecycle.
+            // This is idempotent and cannot add readings to the live chart or counters.
             const logger = document.getElementById('console-logs');
-            const timeLabel = nowLabel();
+            for (const row of Array.from(logger.children)) {
+                if (row.dataset.eventSource === 'condition' || row.dataset.eventSource === 'saved-condition') {
+                    logger.removeChild(row);
+                }
+            }
+            for (const event of events) appendLog(...event, 'saved-condition');
+        }
+
+        function appendLog(rowColor, tsColor, diagnostic, recommendedFix, timestamp = null, source = 'browser') {
+            const logger = document.getElementById('console-logs');
+            const eventTime = timestamp ?? Math.floor(Date.now() / 1000);
+            const timeLabel = new Date(eventTime * 1000).toLocaleTimeString('en-US', { hour12: false });
 
             const entry = document.createElement('div');
-            entry.className = `py-1.5 border-b border-slate-900/50 ${rowColor} leading-relaxed`;
+            entry.className = 'log-row';
+            entry.dataset.eventTime = eventTime;
+            entry.dataset.eventSource = source;
 
-            let html = `<span class="${tsColor}">[${timeLabel}]</span> <span class="${rowColor} font-medium">${diagnostic}</span>`;
+            const cleanDiag = typeof diagnostic === 'string' ? diagnostic.replace(/^\[[^\]]+\]\s*/, '') : '';
+            const indicator = textElement('span', `severity-dot ${rowColor}`);
+            setAttr(indicator, 'aria-hidden', 'true');
+            const message = textElement('span', '', cleanDiag);
+            const severity = rowColor === 'text-rose-400' ? 'Critical' : rowColor === 'text-amber-400' ? 'Degraded' : rowColor === 'text-emerald-400' ? 'Optimal' : 'Information';
+            message.replaceChildren(textElement('span', 'sr-only', severity + ': '), cleanDiag);
+            const time = textElement('time', '', timeLabel);
+            setAttr(time, 'datetime', new Date(eventTime * 1000).toISOString());
+            setAttr(time, 'title', source === 'saved-condition' ? 'Saved session sample timestamp' : timestamp === null ? 'Time observed in this browser; no backend event timestamp is supplied.' : 'Backend sample timestamp');
+            entry.append(indicator, time, message);
             if (recommendedFix && recommendedFix.trim() !== '') {
-                html += `<br><span class="text-slate-500 text-[10px] mt-0.5 inline-block">-> ${recommendedFix}</span>`;
+                const cleanFix = recommendedFix.replace(/^(?:Suggested|Recommended)\s+check:\s*/i, '');
+                entry.append(textElement('span', 'log-fix', `What to check: ${cleanFix}`));
             }
-            entry.innerHTML = html;
 
-            // Prepend new row entry
-            logger.insertBefore(entry, logger.firstChild);
+            // Latest event timestamps first; keep emission order for the same second.
+            const before = Array.from(logger.children).find(row => !row.dataset.eventTime || Number(row.dataset.eventTime) <= eventTime);
+            logger.insertBefore(entry, before || null);
 
             // Drop oldest when exceeds 50
             while (logger.children.length > 50) {
@@ -770,14 +1227,91 @@
         // 8. CORE TELEMETRY FETCH LOOP
         // ═══════════════════════════════════════════════════════════════════════════
 
-        function streamTelemetry() {
-            fetch('/api/telemetry/stream')
-                .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-                .then(data => {
-                    if (!isMonitoring || data.status === "warmup") return;
-                    if (data.session_id !== activeSessionId) return;
-                    if (activeSessionGeneration !== null && data.session_generation !== activeSessionGeneration) return;
-                    if (activeSessionGeneration === null && data.session_generation !== undefined) activeSessionGeneration = data.session_generation;
+        async function streamTelemetry() {
+            if (telemetryRequest || controlPending) return;
+            const request = { controller: new AbortController(), lifecycle };
+            const synchronize = needsSessionSync;
+            telemetryRequest = request;
+            try {
+                const data = await fetchJSON(synchronize ? '/api/telemetry' : '/api/telemetry/stream', {}, request.controller);
+                if (request.lifecycle !== lifecycle || telemetryRequest !== request) return;
+                if (visibilityRefreshRequest === request) visibilityRefreshRequest = null;
+                acceptTelemetry(data, synchronize);
+            } catch (err) {
+                if (request.lifecycle !== lifecycle || telemetryRequest !== request) return;
+                if (visibilityRefreshRequest === request) visibilityRefreshRequest = null;
+                showAvailability('Telemetry unavailable', 'Current readings are unavailable. Retrying connection.');
+            } finally {
+                if (visibilityRefreshRequest === request) visibilityRefreshRequest = null;
+                if (telemetryRequest === request) telemetryRequest = null;
+            }
+        }
+
+        function handleVisibilityChange() {
+            if (isDashboardHidden()) {
+                clearTimeout(freshnessTimer);
+                freshnessTimer = null;
+                return;
+            }
+            if (!isMonitoring && !needsSessionSync) return;
+            if (controlPending) return;
+            if (!telemetryRequest) {
+                streamTelemetry();
+            }
+            if (telemetryRequest) {
+                visibilityRefreshRequest = telemetryRequest;
+            }
+            if (isMonitoring && !needsSessionSync && lastSample) {
+                renderHealth();
+            }
+        }
+
+        function acceptTelemetry(data, synchronize) {
+            if (!data || typeof data.is_monitoring !== 'boolean' || !['success', 'warmup'].includes(data.status)) {
+                throw new Error('Invalid telemetry response');
+            }
+            if (!data.is_monitoring) {
+                const stoppedSessionId = activeSessionId;
+                monitoringStopped();
+                if (Number.isInteger(stoppedSessionId)) loadSavedSessionReport(stoppedSessionId);
+                return;
+            }
+            if (!Number.isInteger(data.session_id) || !Number.isInteger(data.session_generation)) {
+                throw new Error('Missing session identity');
+            }
+            const sameSession = data.session_id === activeSessionId && data.session_generation === activeSessionGeneration;
+            if (!sameSession && activeSessionId !== null && !synchronize) {
+                // Confirm a changed session through the initialization endpoint before
+                // resetting statistics. In-flight requests are also guarded by lifecycle.
+                needsSessionSync = true;
+                showAvailability('Session changed', 'Confirming the active monitoring session.', 'SYNCHRONIZING');
+                return;
+            }
+            adoptSession(data);
+            needsSessionSync = false;
+            startPolling();
+            if (data.status === 'warmup') {
+                showAvailability('Awaiting telemetry', 'Collecting the first sample for this session.', 'WAITING');
+                return;
+            }
+            if (!Number.isSafeInteger(data.batch_id) || data.batch_id < 1 ||
+                !Number.isFinite(data.timestamp) || data.timestamp <= 0 || data.timestamp * 1000 > Date.now() + 1000) {
+                showAvailability('Sample unavailable', 'The latest sample has invalid timing.', 'RESPONDING');
+                return;
+            }
+            if (data.batch_id < lastBatchId || (lastSample && data.timestamp < lastSample.timestamp)) return;
+            if (data.batch_id === lastBatchId) {
+                // Repeated HTTP responses neither refresh the sample time nor add history.
+                renderHealth();
+                return;
+            }
+            lastBatchId = data.batch_id;
+            lastSample = data;
+            renderHealth();
+            renderTelemetry(data);
+        }
+
+        function renderTelemetry(data) {
 
                     const metrics = data.metrics || {};
                     const predictions = data.predictions || {};
@@ -795,11 +1329,11 @@
                     const forecastRaw = data.forecasted_latency ?? predictions.forecasted_latency ?? null;
                     const forecast = (forecastRaw !== null && forecastRaw !== undefined) ? safeNum(forecastRaw) : null;
 
-                    const systemState = data.system_state || 'OPTIMAL';
-                    const diagnostic = data.diagnostic || '[INFO] Network traffic is smooth and normal.';
+                    const systemState = HEALTH_STATES.has(data.system_state) ? data.system_state : null;
+                    const diagnostic = typeof data.diagnostic === 'string' && data.diagnostic ? data.diagnostic : 'Diagnostic unavailable.';
                     const recommendedFix = data.recommended_fix || '';
 
-                    const timeLabel = nowLabel();
+                    const timeLabel = new Date(data.timestamp * 1000).toLocaleTimeString('en-US', { hour12: false });
                     const batchId = data.batch_id;
                     const isNewBatch = (batchId !== undefined && !processedBatchIds.has(batchId));
 
@@ -808,23 +1342,39 @@
                         // ── Track session data ───────────────────────────────────────────
                         if (latency !== null) latencyArray.push(latency);
 
-                        if (systemState === 'CRITICAL') {
-                            totalAlerts++;
-                            alertCounts.anomaly++;
-                            sessionAlertsHistory.push({ timestamp: timeLabel, state: systemState, diagnostic, fix: recommendedFix });
-                        } else if (systemState === 'DEGRADED') {
-                            totalAlerts++;
-                            if (diagnostic.toLowerCase().includes('latency') ||
-                                diagnostic.toLowerCase().includes('delay')) {
-                                alertCounts.latency_delay++;
-                            } else {
-                                alertCounts.packet_loss++;
+                        if (systemState === 'CRITICAL' || systemState === 'DEGRADED') {
+                            const hasAnomaly = systemState === 'CRITICAL';
+                            const latencyBreached = latency !== null && latency > 80.0;
+                            const lossBreached = loss !== null && loss > 2.0;
+                            const diagLower = diagnostic.toLowerCase();
+                            const diagIsLatency = diagLower.includes('latency') || diagLower.includes('delay');
+
+                            const hasHighLatency = latencyBreached || (systemState === 'DEGRADED' && !lossBreached && diagIsLatency);
+                            const hasPacketLoss = lossBreached || (systemState === 'DEGRADED' && !latencyBreached && !hasHighLatency);
+
+                            if (hasAnomaly) {
+                                totalAlerts++;
+                                alertCounts.anomaly++;
+                                sessionAlertsHistory.push({ timestamp: timeLabel, state: 'CRITICAL', diagnostic, fix: recommendedFix });
                             }
-                            sessionAlertsHistory.push({ timestamp: timeLabel, state: systemState, diagnostic, fix: recommendedFix });
+                            if (hasHighLatency) {
+                                totalAlerts++;
+                                alertCounts.latency_delay++;
+                                const latDiag = !hasAnomaly ? diagnostic : `Round-trip latency to 1.1.1.1 exceeded 80 ms (${latency.toFixed(1)} ms).`;
+                                const latFix = !hasAnomaly ? recommendedFix : DEFAULT_FIX_BY_TYPE.HIGH_LATENCY;
+                                sessionAlertsHistory.push({ timestamp: timeLabel, state: 'DEGRADED', diagnostic: latDiag, fix: latFix });
+                            }
+                            if (hasPacketLoss) {
+                                totalAlerts++;
+                                alertCounts.packet_loss++;
+                                const lossDiag = (!hasAnomaly && !hasHighLatency) ? diagnostic : `Failed ICMP probes exceeded 2% across recent checks (${formatPacketLoss(loss)}% loss).`;
+                                const lossFix = (!hasAnomaly && !hasHighLatency) ? recommendedFix : DEFAULT_FIX_BY_TYPE.PACKET_LOSS;
+                                sessionAlertsHistory.push({ timestamp: timeLabel, state: 'DEGRADED', diagnostic: lossDiag, fix: lossFix });
+                            }
                         }
                     }
 
-                    // ── Metric cards (Step 1.2: Override to rose-500 if breached) ───
+                    // ── Metric cards ─────────────────────────────────────────────────
                     if (latency !== null) {
                         setMetric('m-latency', latency.toFixed(1), 'ms', false);
                     } else {
@@ -836,14 +1386,24 @@
                         }
                     }
 
+                    const forecastNote = document.getElementById('m-forecast-note');
                     if (forecast !== null) {
                         setMetric('m-forecast', forecast.toFixed(1), 'ms', false);
+                        if (forecastNote) {
+                            const collected = Math.min(latencyArray.length, LSTM_WINDOW_STEPS);
+                            forecastNote.textContent = collected < LSTM_WINDOW_STEPS
+                                ? `Next reading (warm-up: ${collected}/${LSTM_WINDOW_STEPS} samples)`
+                                : 'Next reading (10-sample window)';
+                        }
                     } else {
                         const el = document.getElementById('m-forecast');
                         if (el) {
                             el.textContent = 'N/A';
                             el.classList.remove('text-emerald-400', 'text-rose-500', 'text-cyan-400');
                             el.classList.add('text-slate-500');
+                        }
+                        if (forecastNote) {
+                            forecastNote.textContent = 'Next reading (awaiting valid RTT)';
                         }
                     }
 
@@ -859,7 +1419,7 @@
                     }
 
                     if (loss !== null) {
-                        setMetric('m-loss', loss.toFixed(2), '%', false);
+                        setMetric('m-loss', formatPacketLoss(loss), '%', false);
                     } else {
                         const el = document.getElementById('m-loss');
                         if (el) {
@@ -871,7 +1431,7 @@
 
                     setMetric('m-bandwidth', bandwidth.toFixed(1), 'Mbps', false);
 
-                    // ── Chart.js line data push ──────────────────────────────────────
+                    // ── Chart.js line data push (Latency & LSTM Forecast in ms) ──────
                     if (isNewBatch) {
                         if (chartData.labels.length >= MAX_POINTS) {
                             chartData.labels.shift();
@@ -880,55 +1440,52 @@
                         chartData.labels.push(timeLabel);
                         chartData.datasets[0].data.push(latency);
                         chartData.datasets[1].data.push(forecast);
-                        chartData.datasets[2].data.push(bandwidth);
                         consoleChart.update();
 
-                        // ── XAI console row ──────────────────────────────────────────────
-                        let rowColor, tsColor;
-                        if (systemState === 'CRITICAL') { rowColor = 'text-rose-500'; tsColor = 'text-rose-700'; }
-                        else if (systemState === 'DEGRADED') { rowColor = 'text-amber-500'; tsColor = 'text-amber-700'; }
-                        else { rowColor = 'text-emerald-400'; tsColor = 'text-slate-700'; }
-                        appendLog(rowColor, tsColor, diagnostic, recommendedFix);
+                        // ── Diagnostic log row ───────────────────────────────────────────
+                        recordActivityTelemetry(data);
 
                         // ── RF Interpretation ──────────────────────────────────────────────
                         const interpContainer = document.getElementById('rf-interpretation-content');
                         if (interpContainer) {
                             const interp = data.interpretability;
-                            if (!interp || !interp.top_features) {
-                                interpContainer.innerHTML = '<span class="text-slate-500">Interpretation unavailable.</span>';
+                            if (!interp || !Array.isArray(interp.top_features)) {
+                                interpContainer.replaceChildren(textElement('span', 'text-slate-400', 'Interpretation unavailable.'));
                             } else {
-                                let classificationHtml = `<div class="mb-2"><span class="text-slate-500 uppercase tracking-widest text-[10px]">Classification:</span> <strong class="${data.classification === 'Abnormal' ? 'text-rose-400' : 'text-emerald-400'}">${data.classification}</strong>`;
+                                const classification = textElement('div', 'mb-1.5');
+                                classification.append(textElement('span', 'text-slate-400 text-xs font-sans font-medium', 'Classification:'), ' ',
+                                    textElement('strong', data.classification === 'Abnormal' ? 'text-rose-400' : 'text-emerald-400', data.classification));
                                 if (interp.classification_confidence !== undefined) {
-                                    classificationHtml += ` <span class="text-slate-500 ml-2 text-[10px]">(Model probability: ${(interp.classification_confidence * 100).toFixed(1)}%)</span>`;
+                                    const probability = Number.isFinite(interp.classification_confidence) ? (interp.classification_confidence * 100).toFixed(1) : String(interp.classification_confidence);
+                                    classification.append(' ', textElement('span', 'text-slate-400 ml-1 text-[11px]', `(model score: ${probability}%)`));
                                 }
-                                classificationHtml += `</div>`;
-
-                                let featuresHtml = `<div class="mt-2 mb-2"><span class="text-slate-500 uppercase tracking-widest text-[10px]">Top Global Features:</span></div>`;
+                                const heading = textElement('div', 'mt-1.5 mb-1');
+                                heading.append(textElement('span', 'text-slate-400 text-[11px] font-sans font-medium', 'What the model considers important:'));
+                                interpContainer.replaceChildren(classification, heading);
                                 interp.top_features.forEach(f => {
-                                    featuresHtml += `<div class="mb-2 pl-2 border-l-2 border-slate-700">
-                                        <div class="text-slate-300 font-bold">${f.feature_name}</div>
-                                        <div class="text-[10px] text-slate-500">Current: <span class="text-cyan-400">${f.current_value}</span> | Global importance: ${f.importance_percent.toFixed(1)}%</div>
-                                    </div>`;
+                                    const feature = textElement('div', 'mb-1.5 pl-2 border-l-2 border-slate-700');
+                                    const values = textElement('div', 'text-[11px] text-slate-400', 'Current: ');
+                                    const importance = Number.isFinite(f.importance_percent) ? f.importance_percent.toFixed(1) : String(f.importance_percent);
+                                    const unit = Number.isFinite(f.current_value) ? featureUnit(f.feature_name) : '';
+                                    values.append(textElement('span', 'text-cyan-400', f.current_value), `${unit} · Global weight: ${importance}%`);
+                                    feature.append(textElement('div', 'text-slate-200 font-semibold text-xs', f.feature_name), values);
+                                    interpContainer.append(feature);
                                 });
-
-                                const noteHtml = `<div class="mt-3 pt-2 border-t border-slate-800 text-[9px] text-slate-600 leading-tight">
-                                    Feature importance describes the Random Forest model globally. Current values are shown for context and are not causal explanations of an individual prediction.
-                                </div>`;
-
-                                interpContainer.innerHTML = classificationHtml + featuresHtml + noteHtml;
+                                interpContainer.append(textElement('div', 'mt-2 pt-1.5 border-t border-slate-800 text-[11px] text-slate-400 font-sans leading-snug',
+                                    'Global weights reflect overall model training, not the cause of a single reading.'));
                             }
                         }
                     }
 
-                    // ── Footer ───────────────────────────────────────────────────────
-                    const ft = document.getElementById('footer-ts');
-                    if (ft) ft.textContent = `LAST SYNC: ${timeLabel} // STATE: ${systemState}`;
-                })
-                .catch(err => {
-                    console.error('[NOC] Fetch error:', err);
-                    appendLog('text-slate-500', 'text-slate-700', `[ERR] ${err.message}`, '');
-                });
         }
+
+        if (typeof document.addEventListener === 'function') {
+            document.addEventListener('visibilitychange', handleVisibilityChange);
+        }
+
+        // Render the initial snapshot immediately; retry failures without overlapping GETs.
+        startPolling();
+        streamTelemetry();
 
     </script>
 </body>

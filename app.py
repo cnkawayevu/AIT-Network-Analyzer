@@ -1,5 +1,6 @@
 import os
-os.environ["SCAPY_USE_LIBPCAP"] = "0"
+if os.name == "nt":
+    os.environ["SCAPY_USE_LIBPCAP"] = "1"
 
 from flask import Flask, render_template, jsonify, request
 import time
@@ -7,8 +8,49 @@ import threading
 import random
 import subprocess
 import json
+import re
 from datetime import datetime
-from scapy.all import sniff, IP
+
+
+def require_running_npcap():
+    """Check only: do not let Scapy try to start a stopped Windows service."""
+    try:
+        result = subprocess.run(
+            [os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "System32", "sc.exe"),
+             "query", "npcap"],
+            capture_output=True, text=True, timeout=5,
+            creationflags=subprocess.CREATE_NO_WINDOW,
+        )
+        if result.returncode == 0 and re.search(r"STATE\s*:\s*4\b", result.stdout):
+            return
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise RuntimeError(f"CAPTURE UNAVAILABLE: cannot query the Npcap service: {exc}") from exc
+    raise RuntimeError("CAPTURE UNAVAILABLE: Npcap service is not running or its status "
+                       "could not be verified. No service start or elevation was attempted.")
+
+
+if os.name == "nt":
+    require_running_npcap()
+
+from scapy.all import sniff, IP, conf
+
+
+def select_capture_socket(config, windows):
+    """Require Npcap on Windows; never substitute the native raw socket."""
+    if windows:
+        if not (config.use_pcap and config.use_npcap):
+            raise RuntimeError(
+                "CAPTURE UNAVAILABLE: Npcap could not initialize. Check the "
+                "installed Npcap service and DLLs. Native Windows capture is disabled."
+            )
+        from scapy.arch.libpcap import L2pcapListenSocket
+        return L2pcapListenSocket
+    return config.L2listen
+
+
+# Validate the backend before importing database.py or starting application workers.
+CAPTURE_SOCKET = select_capture_socket(conf, os.name == "nt")
+
 from interface_selector import get_active_interface, get_active_ip
 from network_models import NetworkAIEngine
 import database as db
@@ -78,24 +120,24 @@ def evaluate_health(rf_classification, latency_ms, packet_loss_pct):
         alerts.append({
             "alert_type": "AI_ANOMALY",
             "severity": "CRITICAL",
-            "diagnostic": "[AI ALERT] Unusual traffic pattern detected! This looks like a network attack or strange behavior.",
-            "recommended_fix": "How to fix: Check your connected devices for unwanted users. Look at your firewall logs to see blocked connections, and disconnect the affected computers to be safe."
+            "diagnostic": "[AI ALERT] Unusual traffic pattern flagged by the Random Forest classifier (for example, a large transfer or traffic burst, not a confirmed attack).",
+            "recommended_fix": "Review active applications and large downloads on this host. If unusual classifications continue, inspect local firewall and router logs."
         })
 
     if latency_ms is not None and latency_ms > 80.0:
         alerts.append({
             "alert_type": "HIGH_LATENCY",
             "severity": "DEGRADED",
-            "diagnostic": "[PERF ALERT] High latency is causing a network delay.",
-            "recommended_fix": "How to fix: Find out which apps or users are downloading large files and limit their speed (traffic shaping)."
+            "diagnostic": "[PERF ALERT] Round-trip latency to 1.1.1.1 exceeded the 80 ms threshold, which can cause noticeable delay.",
+            "recommended_fix": "Check for bandwidth-heavy downloads, video streams, or background transfers on the local network and apply traffic shaping if needed."
         })
 
     if packet_loss_pct is not None and packet_loss_pct > 2.0:
         alerts.append({
             "alert_type": "PACKET_LOSS",
             "severity": "DEGRADED",
-            "diagnostic": "[PERF ALERT] Too many data packets are getting lost (over 2%). This forces the network to keep resending data, making things slow.",
-            "recommended_fix": "How to fix: Check for damaged network cables or loose plugs. Make sure router and switch settings match perfectly on both ends (check duplex settings)."
+            "diagnostic": "[PERF ALERT] Failed ICMP probes exceeded the 2% threshold across recent checks, which can indicate link instability.",
+            "recommended_fix": "Check Wi-Fi signal quality, Ethernet cables, and local router or ISP link stability."
         })
 
     if any(a["severity"] == "CRITICAL" for a in alerts):
@@ -106,16 +148,16 @@ def evaluate_health(rf_classification, latency_ms, packet_loss_pct):
         system_state = "OPTIMAL"
 
     if any(a["alert_type"] == "AI_ANOMALY" for a in alerts):
-        diagnostic = "[AI ALERT] Unusual traffic pattern detected! This looks like a network attack or strange behavior."
-        recommended_fix = "How to fix: Check your connected devices for unwanted users. Look at your firewall logs to see blocked connections, and disconnect the affected computers to be safe."
+        diagnostic = "[AI ALERT] Unusual traffic pattern flagged by the Random Forest classifier (for example, a large transfer or traffic burst, not a confirmed attack)."
+        recommended_fix = "Review active applications and large downloads on this host. If unusual classifications continue, inspect local firewall and router logs."
     elif any(a["alert_type"] == "HIGH_LATENCY" for a in alerts):
-        diagnostic = "[PERF ALERT] High latency is causing a network delay."
-        recommended_fix = "How to fix: Find out which apps or users are downloading large files and limit their speed (traffic shaping)."
+        diagnostic = "[PERF ALERT] Round-trip latency to 1.1.1.1 exceeded the 80 ms threshold, which can cause noticeable delay."
+        recommended_fix = "Check for bandwidth-heavy downloads, video streams, or background transfers on the local network and apply traffic shaping if needed."
     elif any(a["alert_type"] == "PACKET_LOSS" for a in alerts):
-        diagnostic = "[PERF ALERT] Too many data packets are getting lost (over 2%). This forces the network to keep resending data, making things slow."
-        recommended_fix = "How to fix: Check for damaged network cables or loose plugs. Make sure router and switch settings match perfectly on both ends (check duplex settings)."
+        diagnostic = "[PERF ALERT] Failed ICMP probes exceeded the 2% threshold across recent checks, which can indicate link instability."
+        recommended_fix = "Check Wi-Fi signal quality, Ethernet cables, and local router or ISP link stability."
     else:
-        diagnostic = "[INFO] Network traffic is smooth and normal."
+        diagnostic = "[INFO] Latency, ICMP probe responses, and traffic classification are within configured limits."
         recommended_fix = ""
 
     return {
@@ -126,8 +168,23 @@ def evaluate_health(rf_classification, latency_ms, packet_loss_pct):
     }
 
 # Resolve the best active physical interface once at startup
-ACTIVE_IFACE = get_active_interface()   # e.g. "WiFi" or "Ethernet"; None = all interfaces
+ACTIVE_IFACE = get_active_interface()   # e.g. "WiFi" or "Ethernet"; unresolved capture is refused.
 ACTIVE_IP = get_active_ip()
+
+
+def ipv4_datagram_length(packet):
+    """Count a complete IPv4 datagram, excluding link headers and padding."""
+    try:
+        raw = bytes(packet[IP])
+    except (TypeError, ValueError):
+        return None
+    if len(raw) < 20 or raw[0] >> 4 != 4:
+        return None
+    header_length = (raw[0] & 15) * 4
+    total_length = int.from_bytes(raw[2:4], "big")
+    if not 20 <= header_length <= total_length <= len(raw):
+        return None
+    return total_length
 
 
 def live_packet_sniffer():
@@ -138,8 +195,8 @@ def live_packet_sniffer():
     """
     global packet_count, captured_bytes, fwd_lengths, bwd_lengths, first_packet_time, last_packet_time
 
-    iface_label = ACTIVE_IFACE if ACTIVE_IFACE else "ALL interfaces (fallback)"
-    print(f"[sniffer] Starting packet capture on interface: {iface_label}")
+    iface_label = ACTIVE_IFACE or "UNRESOLVED"
+    print(f"[sniffer] Configured capture socket: {CAPTURE_SOCKET.__name__}; interface: {iface_label}")
 
     while True:
         try:
@@ -160,7 +217,9 @@ def live_packet_sniffer():
                     if packet.haslayer(IP):
                         ip_src = packet[IP].src
                         ip_dst = packet[IP].dst
-                        pkt_len = len(packet)
+                        pkt_len = ipv4_datagram_length(packet)
+                        if pkt_len is None:
+                            return
                         pkt_time = float(packet.time)
 
                         if ip_src == ACTIVE_IP or ip_dst == ACTIVE_IP:
@@ -179,21 +238,28 @@ def live_packet_sniffer():
                                         bwd_lengths.append(pkt_len)
                 return packet_callback
 
-            from scapy.config import conf
-            sock = conf.L3socket if not getattr(conf, 'use_pcap', True) else None
-            sniff(
-                iface=ACTIVE_IFACE,
-                L2socket=sock,
-                prn=make_callback(capture_session_id, capture_session_generation),
-                store=0,
-                stop_filter=lambda p: not is_monitoring or current_session_id != capture_session_id or session_generation != capture_session_generation,
-                timeout=1.0  # Add timeout so it doesn't block forever if no packets arrive
-            )
+            if not ACTIVE_IFACE or not ACTIVE_IP:
+                raise RuntimeError("No physical IPv4 adapter/address selected")
+            # Own the handle explicitly: sniff() does not close an opened_socket.
+            capture_socket = CAPTURE_SOCKET(iface=ACTIVE_IFACE)
+            try:
+                sniff(
+                    opened_socket=capture_socket,
+                    prn=make_callback(capture_session_id, capture_session_generation),
+                    store=0,
+                    stop_filter=lambda p: not is_monitoring or current_session_id != capture_session_id or session_generation != capture_session_generation,
+                    timeout=1.0  # Bound idle capture and stop/restart latency.
+                )
+            finally:
+                capture_socket.close()
         except OSError as os_err:
-            print(f"[sniffer] OSError on interface '{iface_label}': {os_err}")
+            print(f"[sniffer] CAPTURE UNAVAILABLE on '{iface_label}': {os_err}. "
+                  "Check adapter access; AdminOnly Npcap requires an Administrator application terminal. "
+                  "No alternate capture backend will be used.")
             time.sleep(5)
         except Exception as exc:
-            print(f"[sniffer] Capture notice on '{iface_label}': {exc}")
+            print(f"[sniffer] CAPTURE UNAVAILABLE on '{iface_label}': {exc}. "
+                  "No alternate capture backend will be used.")
             time.sleep(5)
 
 
