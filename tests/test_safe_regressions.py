@@ -5,6 +5,7 @@ Extracts existing pure functions with AST so app.py/test_integration.py startup
 side effects cannot execute. The source files and validated tests are unchanged.
 """
 import ast
+import sqlite3
 from pathlib import Path
 from types import SimpleNamespace
 import unittest
@@ -126,6 +127,52 @@ class ExistingReadinessFunction(unittest.TestCase):
         with self.assertRaisesRegex(Exception, "Timeout"):
             self.run_readiness(late)
         self.assertEqual(len(self.calls), 1)
+
+
+class ActivityReportReadback(unittest.TestCase):
+    """Execute the real report reader against SQLite in RAM; never import database.py."""
+    def setUp(self):
+        self.conn = sqlite3.connect(":memory:")
+
+        def connection(row_factory=None):
+            self.conn.row_factory = row_factory
+            return self.conn
+
+        scope = {"_get_connection": connection, "sqlite3": sqlite3}
+        initialize, _ = isolated_function("database.py", "init_db", scope)
+        initialize()
+        self.details, _ = isolated_function("database.py", "get_session_details", scope)
+        self.conn.execute("INSERT INTO sessions (id,start_time,status,total_triggers,latency_delay_events) VALUES (1,'2026-11-15T18:54:53','completed',1,1)")
+        self.conn.execute("INSERT INTO session_reports (session_id,generated_at,total_triggers,latency_delay_events) VALUES (1,'2026-11-15T18:59:40',1,1)")
+        self.conn.executemany("""INSERT INTO telemetry
+            (session_id,batch_id,timestamp,latency_ms,packet_loss_pct,rf_classification,system_state,diagnostic,recommended_fix)
+            VALUES (1,?,?,?,?,?,?,?,?)""", [
+            (22, '2026-11-15T18:56:09.928224', 23, 0, 'Normal', 'OPTIMAL', 'Within limits.', ''),
+            (23, '2026-11-15T18:56:12.408310', 85, 0, 'Normal', 'DEGRADED', 'Latency warning.', 'Exact stored recommendation.'),
+            (24, '2026-11-15T18:56:15.081664', 27, 0, 'Normal', 'OPTIMAL', 'Within limits.', '')])
+        self.conn.execute("""INSERT INTO alerts
+            (session_id,batch_id,timestamp,alert_type,severity,diagnostic,recommended_fix)
+            VALUES (1,23,'2026-11-15T18:56:12.408310','HIGH_LATENCY','DEGRADED','Latency warning.','Exact stored recommendation.')""")
+        self.conn.commit()
+
+    def tearDown(self):
+        self.conn.close()
+
+    def test_completed_report_contains_exact_condition_history_without_writes(self):
+        changes = self.conn.total_changes
+        details = self.details(1)
+        self.assertEqual(details['telemetry_count'], 3)
+        self.assertEqual([s['batch_id'] for s in details['activity_samples']], [22, 23, 24])
+        self.assertEqual(details['activity_samples'][1]['latency_ms'], 85)
+        self.assertEqual(details['alerts'][0]['batch_id'], 23)
+        self.assertEqual(details['alerts'][0]['timestamp'], '2026-11-15T18:56:12.408310')
+        self.assertEqual(details['alerts'][0]['recommended_fix'], 'Exact stored recommendation.')
+        self.assertEqual(details['report']['total_triggers'], 1)
+        self.assertEqual(details, self.details(1))
+        self.assertEqual(self.conn.total_changes, changes)
+
+    def test_missing_session_does_not_expose_another_sessions_history(self):
+        self.assertIsNone(self.details(999))
 
 
 if __name__ == "__main__":

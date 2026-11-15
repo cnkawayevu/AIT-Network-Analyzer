@@ -120,24 +120,24 @@ def evaluate_health(rf_classification, latency_ms, packet_loss_pct):
         alerts.append({
             "alert_type": "AI_ANOMALY",
             "severity": "CRITICAL",
-            "diagnostic": "[AI ALERT] Unusual traffic pattern detected! This looks like a network attack or strange behavior.",
-            "recommended_fix": "How to fix: Check your connected devices for unwanted users. Look at your firewall logs to see blocked connections, and disconnect the affected computers to be safe."
+            "diagnostic": "[AI ALERT] Unusual traffic pattern flagged by the Random Forest classifier (for example, a large transfer or traffic burst, not a confirmed attack).",
+            "recommended_fix": "Review active applications and large downloads on this host. If unusual classifications continue, inspect local firewall and router logs."
         })
 
     if latency_ms is not None and latency_ms > 80.0:
         alerts.append({
             "alert_type": "HIGH_LATENCY",
             "severity": "DEGRADED",
-            "diagnostic": "[PERF ALERT] High latency is causing a network delay.",
-            "recommended_fix": "How to fix: Find out which apps or users are downloading large files and limit their speed (traffic shaping)."
+            "diagnostic": "[PERF ALERT] Round-trip latency to 1.1.1.1 exceeded the 80 ms threshold, which can cause noticeable delay.",
+            "recommended_fix": "Check for bandwidth-heavy downloads, video streams, or background transfers on the local network and apply traffic shaping if needed."
         })
 
     if packet_loss_pct is not None and packet_loss_pct > 2.0:
         alerts.append({
             "alert_type": "PACKET_LOSS",
             "severity": "DEGRADED",
-            "diagnostic": "[PERF ALERT] Too many data packets are getting lost (over 2%). This forces the network to keep resending data, making things slow.",
-            "recommended_fix": "How to fix: Check for damaged network cables or loose plugs. Make sure router and switch settings match perfectly on both ends (check duplex settings)."
+            "diagnostic": "[PERF ALERT] Failed ICMP probes exceeded the 2% threshold across recent checks, which can indicate link instability.",
+            "recommended_fix": "Check Wi-Fi signal quality, Ethernet cables, and local router or ISP link stability."
         })
 
     if any(a["severity"] == "CRITICAL" for a in alerts):
@@ -148,16 +148,16 @@ def evaluate_health(rf_classification, latency_ms, packet_loss_pct):
         system_state = "OPTIMAL"
 
     if any(a["alert_type"] == "AI_ANOMALY" for a in alerts):
-        diagnostic = "[AI ALERT] Unusual traffic pattern detected! This looks like a network attack or strange behavior."
-        recommended_fix = "How to fix: Check your connected devices for unwanted users. Look at your firewall logs to see blocked connections, and disconnect the affected computers to be safe."
+        diagnostic = "[AI ALERT] Unusual traffic pattern flagged by the Random Forest classifier (for example, a large transfer or traffic burst, not a confirmed attack)."
+        recommended_fix = "Review active applications and large downloads on this host. If unusual classifications continue, inspect local firewall and router logs."
     elif any(a["alert_type"] == "HIGH_LATENCY" for a in alerts):
-        diagnostic = "[PERF ALERT] High latency is causing a network delay."
-        recommended_fix = "How to fix: Find out which apps or users are downloading large files and limit their speed (traffic shaping)."
+        diagnostic = "[PERF ALERT] Round-trip latency to 1.1.1.1 exceeded the 80 ms threshold, which can cause noticeable delay."
+        recommended_fix = "Check for bandwidth-heavy downloads, video streams, or background transfers on the local network and apply traffic shaping if needed."
     elif any(a["alert_type"] == "PACKET_LOSS" for a in alerts):
-        diagnostic = "[PERF ALERT] Too many data packets are getting lost (over 2%). This forces the network to keep resending data, making things slow."
-        recommended_fix = "How to fix: Check for damaged network cables or loose plugs. Make sure router and switch settings match perfectly on both ends (check duplex settings)."
+        diagnostic = "[PERF ALERT] Failed ICMP probes exceeded the 2% threshold across recent checks, which can indicate link instability."
+        recommended_fix = "Check Wi-Fi signal quality, Ethernet cables, and local router or ISP link stability."
     else:
-        diagnostic = "[INFO] Network traffic is smooth and normal."
+        diagnostic = "[INFO] Latency, ICMP probe responses, and traffic classification are within configured limits."
         recommended_fix = ""
 
     return {
